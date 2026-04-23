@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"sync"
@@ -15,11 +14,6 @@ import (
 
 	"github.com/topic-voting/backend/internal/model"
 )
-
-type WSBroadcaster interface {
-	BroadcastLeaderboard(topicID uuid.UUID)
-	BroadcastChatMessage(topicID uuid.UUID, msg *wsMessage)
-}
 
 type WebSocketHub struct {
 	mu         sync.RWMutex
@@ -110,7 +104,7 @@ func (h *WebSocketHub) BroadcastLeaderboard(topicID uuid.UUID) {
 	}
 }
 
-func (h *WebSocketHub) BroadcastChatMessage(topicID uuid.UUID, msg *wsMessage) {
+func (h *WebSocketHub) BroadcastChatMessage(topicID uuid.UUID, msg interface{}) {
 	data, err := json.Marshal(msg)
 	if err != nil {
 		return
@@ -147,14 +141,10 @@ func (c *Client) readPump(pingInterval, pongTimeout time.Duration) {
 		c.conn.Close(websocket.StatusNormalClosure, "")
 	}()
 
-	c.conn.SetReadDeadline(time.Now().Add(pongTimeout))
-	c.conn.SetPongHandler(func(string) error {
-		c.conn.SetReadDeadline(time.Now().Add(pongTimeout))
-		return nil
-	})
-
 	for {
-		_, message, err := c.conn.Read(context.Background())
+		ctx, cancel := context.WithTimeout(context.Background(), pingInterval+pongTimeout)
+		_, message, err := c.conn.Read(ctx)
+		cancel()
 		if err != nil {
 			break
 		}
@@ -183,6 +173,15 @@ func (c *Client) handleChatMessage(raw []byte) {
 	if msg.Type != "chat_message" {
 		return
 	}
+
+	c.hub.BroadcastChatMessage(c.topicID, wsMessage{
+		Type: "chat_pending",
+		Data: map[string]string{
+			"username": msg.Data.Username,
+			"message":  msg.Data.Message,
+			"status":   "pending",
+		},
+	})
 
 	voteReq := model.SubmitVoteRequest{
 		TopicID:    c.topicID,
@@ -225,7 +224,7 @@ func (c *Client) writePump(pingInterval time.Duration) {
 		select {
 		case message, ok := <-c.send:
 			if !ok {
-				c.conn.Write(context.Background(), websocket.StatusNormalClosure, []byte{})
+				c.conn.Write(context.Background(), websocket.MessageText, []byte{})
 				return
 			}
 			c.conn.Write(context.Background(), websocket.MessageText, message)

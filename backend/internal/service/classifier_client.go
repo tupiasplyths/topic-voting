@@ -12,6 +12,7 @@ import (
 
 type ClassifierClient interface {
 	Classify(ctx context.Context, message, topic string, existingLabels []string, threshold float64) (label string, confidence float64)
+	HealthCheck(ctx context.Context) error
 }
 
 type classifierClient struct {
