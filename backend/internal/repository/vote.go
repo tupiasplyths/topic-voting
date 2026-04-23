@@ -14,6 +14,7 @@ import (
 type VoteRepository interface {
 	InsertBatch(ctx context.Context, votes []*model.Vote) error
 	GetTalliesByTopic(ctx context.Context, topicID uuid.UUID) ([]model.LeaderboardEntry, error)
+	GetAllTallies(ctx context.Context) (map[uuid.UUID][]model.LeaderboardEntry, error)
 }
 
 type voteRepo struct {
@@ -70,4 +71,26 @@ func (r *voteRepo) GetTalliesByTopic(ctx context.Context, topicID uuid.UUID) ([]
 		entries = append(entries, e)
 	}
 	return entries, rows.Err()
+}
+
+func (r *voteRepo) GetAllTallies(ctx context.Context) (map[uuid.UUID][]model.LeaderboardEntry, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT topic_id, classified_label, SUM(weight) AS total_weight, COUNT(*) AS vote_count, MAX(created_at) AS last_vote_at
+		 FROM votes GROUP BY topic_id, classified_label
+		 ORDER BY topic_id, total_weight DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("get all tallies: %w", err)
+	}
+	defer rows.Close()
+
+	result := make(map[uuid.UUID][]model.LeaderboardEntry)
+	for rows.Next() {
+		var topicID uuid.UUID
+		var e model.LeaderboardEntry
+		if err := rows.Scan(&topicID, &e.Label, &e.TotalWeight, &e.VoteCount, &e.LastVoteAt); err != nil {
+			return nil, fmt.Errorf("scan tally: %w", err)
+		}
+		result[topicID] = append(result[topicID], e)
+	}
+	return result, rows.Err()
 }
