@@ -24,7 +24,7 @@ def clf(mock_pipeline):
 class TestVoteClassifierInit:
     def test_default_config(self, mock_pipeline):
         clf = VoteClassifier()
-        assert clf.model_name == "MoritzLaurer/mDeBERTa-v3-base-mnli-xnli"
+        assert clf.model_name == "typeform/distilbert-base-uncased-mnli"
         assert clf.device == -1
         assert clf.max_length == 512
         assert clf.max_labels_per_topic == 100
