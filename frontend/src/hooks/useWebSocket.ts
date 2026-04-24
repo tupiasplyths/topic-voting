@@ -75,11 +75,16 @@ export function useWebSocket<T>(
   }, []);
 
   useEffect(() => {
+    if (!url) {
+      close();
+      setStatus('closed');
+      return;
+    }
     connect();
     return () => {
       close();
     };
-  }, [connect, close]);
+  }, [connect, close, url]);
 
   return { status, send, close };
 }

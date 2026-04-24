@@ -11,18 +11,25 @@ export default function Leaderboard({ topicId }: Props) {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [topic, setTopic] = useState('');
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
     getLeaderboard(topicId)
       .then((lb) => {
         if (!cancelled) {
           setEntries(lb.entries);
           setTopic(lb.topic);
           setUpdatedAt(lb.updated_at);
+          setLoading(false);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
     return () => {
       cancelled = true;
     };
@@ -63,10 +70,15 @@ export default function Leaderboard({ topicId }: Props) {
         </div>
       </div>
 
-      {entries.length === 0 ? (
-        <p className="text-gray-500 text-sm py-8 text-center">
-          No votes yet. Waiting for votes...
-        </p>
+      {loading ? (
+        <div className="flex items-center justify-center py-8">
+          <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : entries.length === 0 ? (
+        <div className="text-center py-8">
+          <div className="inline-block w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mb-4" />
+          <p className="text-gray-500 text-sm">Waiting for votes...</p>
+        </div>
       ) : (
         <ul className="space-y-2">
           {entries.map((entry, i) => {

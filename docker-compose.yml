@@ -1,0 +1,25 @@
+services:
+  backend:
+    build: ./backend
+    ports: ["8585:8585"]
+    env_file: .env
+    restart: unless-stopped
+    depends_on:
+      classifier:
+        condition: service_healthy
+
+  classifier:
+    build: ./classifier
+    ports: ["4747:4747"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4747/health"]
+      interval: 5s
+      retries: 10
+
+  frontend:
+    build: ./frontend
+    ports: ["5442:5442"]
+    restart: unless-stopped
+    depends_on:
+      - backend

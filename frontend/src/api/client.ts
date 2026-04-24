@@ -1,10 +1,25 @@
 import axios from 'axios';
+import { showToast } from '../components/Toast';
 import type { Topic, CreateTopicRequest, Leaderboard } from '../types';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8585',
   timeout: 5000,
 });
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (axios.isAxiosError(error)) {
+      if (!error.response) {
+        showToast('Network error — please check your connection', 'error');
+      } else if (error.response.status >= 500) {
+        showToast('Server error — please try again later', 'error');
+      }
+    }
+    return Promise.reject(error);
+  },
+);
 
 export async function getTopics(): Promise<Topic[]> {
   const { data } = await api.get<Topic[]>('/api/topics');

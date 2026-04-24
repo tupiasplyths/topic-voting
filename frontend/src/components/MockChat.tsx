@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Gem, Play, Square, Zap } from 'lucide-react';
+import { Gem, Play, Square, Zap, Trash2 } from 'lucide-react';
 import type { ChatMessage, ChatSpeed } from '../types/chat';
 import {
   generateMessage,
@@ -177,6 +177,12 @@ export default function MockChat({ topicId, topicTitle }: MockChatProps) {
     addSystemMessage('Simulation stopped');
   };
 
+  const clearChat = () => {
+    setMessages([]);
+    setMsgCount(0);
+    addSystemMessage('Chat cleared');
+  };
+
   useEffect(() => {
     if (!isRunning) return;
     scheduleNext();
@@ -190,8 +196,13 @@ export default function MockChat({ topicId, topicTitle }: MockChatProps) {
   useEffect(() => {
     if (wsRef.current) {
       wsRef.current.close();
-      if (isRunning) connectWs();
+      wsRef.current = null;
     }
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    if (isRunning) connectWs();
   }, [topicId]);
 
   useEffect(() => {
@@ -255,6 +266,14 @@ export default function MockChat({ topicId, topicTitle }: MockChatProps) {
               </button>
             ))}
           </div>
+          <button
+            onClick={clearChat}
+            className="flex items-center gap-1 px-2 py-1.5 rounded text-xs font-medium text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+            title="Clear chat"
+          >
+            <Trash2 size={12} />
+            Clear
+          </button>
         </div>
         <div className="text-xs text-gray-500">
           {msgCount} messages sent
@@ -263,6 +282,9 @@ export default function MockChat({ topicId, topicTitle }: MockChatProps) {
               wsStatus === 'connected' ? 'bg-green-500' :
               wsStatus === 'connecting' ? 'bg-yellow-500' : 'bg-red-500'
             }`} />
+          )}
+          {!isRunning && messages.length > 0 && (
+            <span className="ml-2 text-gray-600">paused</span>
           )}
         </div>
       </div>

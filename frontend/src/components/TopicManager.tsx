@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Plus, X } from 'lucide-react';
 import { getTopics, getActiveTopic, createTopic, closeTopic } from '../api/client';
+import { useToast } from './Toast';
 import type { Topic, CreateTopicRequest } from '../types';
 
 interface Props {
@@ -8,6 +9,7 @@ interface Props {
 }
 
 export default function TopicManager({ onActiveTopicChange }: Props) {
+  const { toast } = useToast();
   const [topics, setTopics] = useState<Topic[]>([]);
   const [activeTopic, setActiveTopic] = useState<Topic | null>(null);
   const [title, setTitle] = useState('');
@@ -15,7 +17,15 @@ export default function TopicManager({ onActiveTopicChange }: Props) {
   const [threshold, setThreshold] = useState(0.5);
   const [setActive, setSetActive] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [closing, setClosing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
 
   const refresh = useCallback(async () => {
     try {
@@ -51,19 +61,26 @@ export default function TopicManager({ onActiveTopicChange }: Props) {
       setThreshold(0.5);
       setSetActive(true);
       await refresh();
+      toast('Topic created successfully', 'success');
     } catch {
       setError('Failed to create topic');
+      toast('Failed to create topic', 'error');
     } finally {
       setLoading(false);
     }
   };
 
   const handleClose = async (id: string) => {
+    setClosing(true);
     try {
       await closeTopic(id);
       await refresh();
+      toast('Topic closed', 'info');
     } catch {
       setError('Failed to close topic');
+      toast('Failed to close topic', 'error');
+    } finally {
+      setClosing(false);
     }
   };
 
@@ -89,7 +106,8 @@ export default function TopicManager({ onActiveTopicChange }: Props) {
             </div>
             <button
               onClick={() => handleClose(activeTopic.id)}
-              className="p-1.5 rounded hover:bg-red-800 text-gray-400 hover:text-red-300 transition-colors"
+              disabled={closing}
+              className="p-1.5 rounded hover:bg-red-800 text-gray-400 hover:text-red-300 transition-colors disabled:opacity-50"
               title="Close topic"
             >
               <X size={16} />

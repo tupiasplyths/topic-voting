@@ -43,7 +43,13 @@ export default function VoteBarChart({
     }))
     .reverse();
 
-  if (data.length === 0) return null;
+  if (data.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-48">
+        <p className="text-gray-500 text-sm">No data yet</p>
+      </div>
+    );
+  }
 
   return (
     <ResponsiveContainer width="100%" height={Math.max(data.length * 48, 200)}>
