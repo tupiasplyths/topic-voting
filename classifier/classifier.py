@@ -30,7 +30,7 @@ DEFAULT_MAX_LABELS_PER_TOPIC = 100
 
 class VoteClassifier:
     def __init__(self):
-        self.model_name = os.getenv("CLASSIFIER_MODEL", "MoritzLaurer/mDeBERTa-v3-base-mnli-xnli")
+        self.model_name = os.getenv("CLASSIFIER_MODEL", "typeform/distilbert-base-uncased-mnli")
         self.device = int(os.getenv("CLASSIFIER_DEVICE", "-1"))
         self.max_length = int(os.getenv("CLASSIFIER_MAX_LENGTH", "512"))
         self.max_labels_per_topic = int(os.getenv("CLASSIFIER_MAX_LABELS_PER_TOPIC", str(DEFAULT_MAX_LABELS_PER_TOPIC)))

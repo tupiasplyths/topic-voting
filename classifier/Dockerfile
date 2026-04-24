@@ -1,6 +1,6 @@
 FROM python:3.11-slim
 
-ARG CLASSIFIER_MODEL=MoritzLaurer/mDeBERTa-v3-base-mnli-xnli
+ARG CLASSIFIER_MODEL=typeform/distilbert-base-uncased-mnli
 
 WORKDIR /app
 
