@@ -8,4 +8,5 @@ var (
 	ErrNoActiveTopic    = errors.New("no_active_topic")
 	ErrInvalidThreshold = errors.New("invalid_threshold")
 	ErrQueueFull        = errors.New("queue_full")
+	ErrNoLabelsToMerge  = errors.New("no_labels_to_merge")
 )

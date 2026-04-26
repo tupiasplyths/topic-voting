@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"github.com/topic-voting/backend/internal/middleware"
 	"github.com/topic-voting/backend/internal/model"
 	"github.com/topic-voting/backend/internal/service"
 )
@@ -20,12 +21,13 @@ func NewVoteHandler(svc service.VoteService) *VoteHandler {
 	return &VoteHandler{svc: svc}
 }
 
-func (h *VoteHandler) RegisterRoutes(rg *gin.RouterGroup) {
+func (h *VoteHandler) RegisterRoutes(rg *gin.RouterGroup, adminKey string) {
 	votes := rg.Group("/votes")
 	{
 		votes.POST("", h.Submit)
 		votes.GET("/leaderboard", h.GetLeaderboard)
 		votes.GET("/labels", h.GetLabels)
+		votes.POST("/merge-labels", middleware.RequireAdminKey(adminKey), h.MergeLabels)
 	}
 }
 
@@ -109,4 +111,36 @@ func (h *VoteHandler) GetLabels(c *gin.Context) {
 		labels = []string{}
 	}
 	c.JSON(http.StatusOK, gin.H{"topic_id": topicID, "labels": labels})
+}
+
+func (h *VoteHandler) MergeLabels(c *gin.Context) {
+	var req model.MergeLabelsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "validation", "details": err.Error()})
+		return
+	}
+
+	if len(req.SourceLabels) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "validation",
+			"details": "source_labels must not be empty",
+		})
+		return
+	}
+
+	resp, err := h.svc.MergeLabels(c.Request.Context(), &req)
+	if err != nil {
+		if errors.Is(err, service.ErrTopicNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "topic_not_found"})
+			return
+		}
+		if errors.Is(err, service.ErrNoLabelsToMerge) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "no_labels_to_merge"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal_error"})
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
 }

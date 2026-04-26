@@ -15,6 +15,7 @@ type VoteRepository interface {
 	InsertBatch(ctx context.Context, votes []*model.Vote) error
 	GetTalliesByTopic(ctx context.Context, topicID uuid.UUID) ([]model.LeaderboardEntry, error)
 	GetAllTallies(ctx context.Context) (map[uuid.UUID][]model.LeaderboardEntry, error)
+	MergeLabels(ctx context.Context, topicID uuid.UUID, sourceLabels []string, targetLabel string) (int, error)
 }
 
 type voteRepo struct {
@@ -93,4 +94,16 @@ func (r *voteRepo) GetAllTallies(ctx context.Context) (map[uuid.UUID][]model.Lea
 		result[topicID] = append(result[topicID], e)
 	}
 	return result, rows.Err()
+}
+
+func (r *voteRepo) MergeLabels(ctx context.Context, topicID uuid.UUID, sourceLabels []string, targetLabel string) (int, error) {
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE votes SET classified_label = $1
+		 WHERE topic_id = $2 AND classified_label = ANY($3) AND classified_label != $1`,
+		targetLabel, topicID, sourceLabels,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("merge labels: %w", err)
+	}
+	return int(tag.RowsAffected()), nil
 }

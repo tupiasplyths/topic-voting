@@ -95,7 +95,7 @@ func main() {
 	voteProcessor.Start()
 
 	topicSvc := service.NewTopicService(topicRepo)
-	voteSvc := service.NewVoteService(topicRepo, voteProcessor, tallyCache, cfg.ClassifierThreshold)
+	voteSvc := service.NewVoteService(topicRepo, voteRepo, voteProcessor, tallyCache, wsHub, cfg.ClassifierThreshold)
 
 	topicHandler := handler.NewTopicHandler(topicSvc)
 	voteHandler := handler.NewVoteHandler(voteSvc)
@@ -122,7 +122,7 @@ func main() {
 
 	api := r.Group("/api")
 	topicHandler.RegisterRoutes(api)
-	voteHandler.RegisterRoutes(api)
+	voteHandler.RegisterRoutes(api, cfg.AdminKey)
 
 	r.GET("/ws/dashboard", func(c *gin.Context) {
 		topicIDStr := c.Query("topic_id")

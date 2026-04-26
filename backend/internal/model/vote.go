@@ -40,3 +40,16 @@ type Leaderboard struct {
 	Entries   []LeaderboardEntry `json:"entries"`
 	UpdatedAt time.Time          `json:"updated_at"`
 }
+
+type MergeLabelsRequest struct {
+	TopicID      uuid.UUID `json:"topic_id" binding:"required"`
+	SourceLabels []string  `json:"source_labels" binding:"required,min=1"`
+	TargetLabel  string    `json:"target_label" binding:"required,min=1"`
+}
+
+type MergeLabelsResponse struct {
+	TopicID       uuid.UUID `json:"topic_id"`
+	MergedLabels  []string  `json:"merged_labels"`
+	TargetLabel   string    `json:"target_label"`
+	VotesAffected int       `json:"votes_affected"`
+}

@@ -167,6 +167,41 @@ func (c *VoteTallyCache) GetLabels(topicID uuid.UUID) []string {
 	return labels
 }
 
+func (c *VoteTallyCache) MergeLabels(topicID uuid.UUID, sourceLabels []string, targetLabel string) {
+	c.mu.RLock()
+	tt, ok := c.tallies[topicID]
+	c.mu.RUnlock()
+
+	if !ok {
+		return
+	}
+
+	tt.mu.Lock()
+	defer tt.mu.Unlock()
+
+	target, hasTarget := tt.Labels[targetLabel]
+	if !hasTarget {
+		target = &LabelTally{}
+		tt.Labels[targetLabel] = target
+	}
+
+	for _, src := range sourceLabels {
+		if src == targetLabel {
+			continue
+		}
+		lt, ok := tt.Labels[src]
+		if !ok {
+			continue
+		}
+		target.TotalWeight += lt.TotalWeight
+		target.VoteCount += lt.VoteCount
+		if lt.LastVoteAt.After(target.LastVoteAt) {
+			target.LastVoteAt = lt.LastVoteAt
+		}
+		delete(tt.Labels, src)
+	}
+}
+
 func (c *VoteTallyCache) flushLoop() {
 	defer close(c.done)
 	ticker := time.NewTicker(c.flushMs)

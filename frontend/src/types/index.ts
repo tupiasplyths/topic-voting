@@ -33,3 +33,16 @@ export interface WSMessage<T = unknown> {
   type: string;
   data: T;
 }
+
+export interface MergeLabelsRequest {
+  topic_id: string;
+  source_labels: string[];
+  target_label: string;
+}
+
+export interface MergeLabelsResponse {
+  topic_id: string;
+  merged_labels: string[];
+  target_label: string;
+  votes_affected: number;
+}

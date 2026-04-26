@@ -28,6 +28,7 @@ type Config struct {
 	WSPongTimeout         time.Duration
 	CORSAllowedOrigins    []string
 	LogLevel              string
+	AdminKey              string
 }
 
 func Load() (*Config, error) {
@@ -44,6 +45,7 @@ func Load() (*Config, error) {
 		ClassifierURL:      getEnv("CLASSIFIER_URL", "http://localhost:4747"),
 		CORSAllowedOrigins: parseOrigins(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:5442")),
 		LogLevel:           getEnv("LOG_LEVEL", "info"),
+		AdminKey:           getEnv("ADMIN_KEY", ""),
 	}
 
 	var err error
