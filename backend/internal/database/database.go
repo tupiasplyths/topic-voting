@@ -60,10 +60,10 @@ func (db *DB) RunMigrations(ctx context.Context, migrationsFS fs.FS) error {
 		if entry.IsDir() {
 			continue
 		}
-		var alreadyApplied bool
+		var found int
 		err := db.Pool.QueryRow(ctx,
 			`SELECT 1 FROM schema_migrations WHERE version = $1`, entry.Name(),
-		).Scan(&alreadyApplied)
+		).Scan(&found)
 		if err == nil {
 			log.Printf("migration %s already applied, skipping", entry.Name())
 			continue

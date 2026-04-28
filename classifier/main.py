@@ -2,6 +2,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
+import uvicorn
 from fastapi import FastAPI, HTTPException
 
 from classifier import VoteClassifier
@@ -58,3 +59,8 @@ async def labels(topic_id: str):
     if classifier is None:
         return {"topic_id": topic_id, "labels": []}
     return {"topic_id": topic_id, "labels": classifier.get_labels(topic_id)}
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    uvicorn.run(app, host="0.0.0.0", port=4747)

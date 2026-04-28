@@ -18,35 +18,41 @@ export function useWebSocket<T>(
   const reconnectDelayRef = useRef(1000);
   const onMessageRef = useRef(onMessage);
   const urlRef = useRef(url);
+  const generationRef = useRef(0);
 
   onMessageRef.current = onMessage;
   urlRef.current = url;
 
   const connect = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+    if (wsRef.current?.readyState === WebSocket.OPEN || wsRef.current?.readyState === WebSocket.CONNECTING) return;
+
+    const gen = ++generationRef.current;
 
     setStatus('connecting');
     const ws = new WebSocket(urlRef.current);
     wsRef.current = ws;
 
     ws.onopen = () => {
+      if (gen !== generationRef.current) return;
       setStatus('open');
       reconnectDelayRef.current = 1000;
     };
 
     ws.onmessage = (event) => {
+      if (gen !== generationRef.current) return;
       try {
         const data = JSON.parse(event.data) as T;
         onMessageRef.current(data);
       } catch {
-        // ignore non-JSON messages
       }
     };
 
     ws.onclose = () => {
+      if (gen !== generationRef.current) return;
       setStatus('closed');
       wsRef.current = null;
       reconnectTimeoutRef.current = setTimeout(() => {
+        if (gen !== generationRef.current) return;
         const delay = reconnectDelayRef.current;
         reconnectDelayRef.current = Math.min(delay * 2, 30000);
         connect();
@@ -54,6 +60,7 @@ export function useWebSocket<T>(
     };
 
     ws.onerror = () => {
+      if (gen !== generationRef.current) return;
       setStatus('error');
     };
   }, []);
@@ -65,6 +72,7 @@ export function useWebSocket<T>(
   }, []);
 
   const close = useCallback(() => {
+    generationRef.current++;
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
@@ -77,7 +85,6 @@ export function useWebSocket<T>(
   useEffect(() => {
     if (!url) {
       close();
-      setStatus('closed');
       return;
     }
     connect();
