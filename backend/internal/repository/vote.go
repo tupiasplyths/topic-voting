@@ -34,9 +34,9 @@ func (r *voteRepo) InsertBatch(ctx context.Context, votes []*model.Vote) error {
 	batch := &pgx.Batch{}
 	for _, v := range votes {
 		batch.Queue(
-			`INSERT INTO votes (id, topic_id, username, raw_message, classified_label, confidence, weight, is_donation, bits_amount, created_at)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-			v.ID, v.TopicID, v.Username, v.RawMessage, v.ClassifiedLabel, v.Confidence, v.Weight, v.IsDonation, v.BitsAmount, v.CreatedAt,
+			`INSERT INTO votes (id, topic_id, username, raw_message, classified_label, confidence, weight, is_donation, bits_amount, donation_amount, donation_currency, created_at)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+			v.ID, v.TopicID, v.Username, v.RawMessage, v.ClassifiedLabel, v.Confidence, v.Weight, v.IsDonation, v.BitsAmount, v.DonationAmount, v.DonationCurrency, v.CreatedAt,
 		)
 	}
 

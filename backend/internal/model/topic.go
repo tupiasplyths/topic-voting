@@ -12,6 +12,7 @@ type Topic struct {
 	Description         string     `json:"description"`
 	IsActive            bool       `json:"is_active"`
 	ClassifierThreshold float64    `json:"classifier_threshold"`
+	VotingMode          string     `json:"voting_mode"`
 	CreatedAt           time.Time  `json:"created_at"`
 	ClosedAt            *time.Time `json:"closed_at,omitempty"`
 }
@@ -21,4 +22,5 @@ type CreateTopicRequest struct {
 	Description         string   `json:"description"`
 	ClassifierThreshold *float64 `json:"classifier_threshold,omitempty"`
 	SetActive           bool     `json:"set_active"`
+	VotingMode          *string  `json:"voting_mode,omitempty"`
 }

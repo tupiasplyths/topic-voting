@@ -34,11 +34,20 @@ func (s *topicService) Create(ctx context.Context, req *model.CreateTopicRequest
 		threshold = *req.ClassifierThreshold
 	}
 
+	votingMode := "chat"
+	if req.VotingMode != nil {
+		votingMode = *req.VotingMode
+	}
+	if votingMode != "chat" && votingMode != "donation" {
+		return nil, fmt.Errorf("invalid voting_mode: %s", votingMode)
+	}
+
 	topic := &model.Topic{
 		Title:               req.Title,
 		Description:         req.Description,
 		IsActive:            req.SetActive,
 		ClassifierThreshold: threshold,
+		VotingMode:          votingMode,
 	}
 
 	if !req.SetActive {

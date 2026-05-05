@@ -16,13 +16,16 @@ type WSBroadcaster interface {
 }
 
 type PendingVote struct {
-	TopicID    uuid.UUID
-	TopicTitle string
-	Username   string
-	Message    string
-	IsDonation bool
-	BitsAmount int
-	Threshold  float64
+	TopicID          uuid.UUID
+	TopicTitle       string
+	Username         string
+	Message          string
+	IsDonation       bool
+	BitsAmount       int
+	Threshold        float64
+	VotingMode       string
+	DonationAmount   float64
+	DonationCurrency string
 }
 
 type ClassifiedVote struct {
@@ -39,6 +42,7 @@ type VoteProcessor struct {
 	classifier ClassifierClient
 	tallyCache *VoteTallyCache
 	wsHub      WSBroadcaster
+	exchanger  Exchanger
 	quit       chan struct{}
 	wg         sync.WaitGroup
 }
@@ -49,6 +53,7 @@ func NewVoteProcessor(
 	classifier ClassifierClient,
 	tallyCache *VoteTallyCache,
 	wsHub WSBroadcaster,
+	exchanger Exchanger,
 ) *VoteProcessor {
 	return &VoteProcessor{
 		enqueueCh:  make(chan *PendingVote, queueCap),
@@ -57,6 +62,7 @@ func NewVoteProcessor(
 		classifier: classifier,
 		tallyCache: tallyCache,
 		wsHub:      wsHub,
+		exchanger:  exchanger,
 		quit:       make(chan struct{}),
 	}
 }
@@ -102,9 +108,11 @@ func (p *VoteProcessor) worker() {
 				RawMessage:      pv.Message,
 				ClassifiedLabel: label,
 				Confidence:      confidence,
-				Weight:          computeWeight(pv.IsDonation, pv.BitsAmount),
+				Weight:          computeWeight(pv, p.exchanger),
 				IsDonation:      pv.IsDonation,
 				BitsAmount:      pv.BitsAmount,
+				DonationAmount:  pv.DonationAmount,
+				DonationCurrency: pv.DonationCurrency,
 			}
 
 			result := &ClassifiedVote{
@@ -134,6 +142,7 @@ func (p *VoteProcessor) resultConsumer() {
 			p.tallyCache.Increment(
 				cv.Vote.TopicID,
 				cv.PendingVote.TopicTitle,
+				cv.PendingVote.VotingMode,
 				cv.ClassifiedL,
 				cv.Vote.Weight,
 				cv.Vote,
@@ -143,11 +152,13 @@ func (p *VoteProcessor) resultConsumer() {
 			go p.wsHub.BroadcastChatMessage(topicID, &WSClassifiedMessage{
 				Type: "chat_classified",
 				Data: WSClassifiedData{
-					Username:        cv.PendingVote.Username,
-					Message:         cv.PendingVote.Message,
-					ClassifiedLabel: cv.ClassifiedL,
-					Confidence:      cv.Confidence,
-					Weight:          cv.Vote.Weight,
+					Username:         cv.PendingVote.Username,
+					Message:          cv.PendingVote.Message,
+					ClassifiedLabel:  cv.ClassifiedL,
+					Confidence:       cv.Confidence,
+					Weight:           cv.Vote.Weight,
+					DonationAmount:   cv.PendingVote.DonationAmount,
+					DonationCurrency: cv.PendingVote.DonationCurrency,
 				},
 			})
 		case <-p.quit:
@@ -156,11 +167,25 @@ func (p *VoteProcessor) resultConsumer() {
 	}
 }
 
-func computeWeight(isDonation bool, bitsAmount int) int {
-	if !isDonation {
-		return 1
+func computeWeight(pv *PendingVote, exchanger Exchanger) float64 {
+	switch pv.VotingMode {
+	case "donation":
+		if !pv.IsDonation {
+			return 0
+		}
+		if pv.DonationAmount > 0 {
+			return exchanger.ToUSD(pv.DonationAmount, pv.DonationCurrency)
+		}
+		return float64(pv.BitsAmount) / 100.0
+	default: // "chat"
+		if !pv.IsDonation {
+			return 1.0
+		}
+		if pv.DonationAmount > 0 {
+			return 1.0 + pv.DonationAmount
+		}
+		return 1.0 + float64(pv.BitsAmount)/100.0
 	}
-	return 1 + bitsAmount/100
 }
 
 type WSClassifiedMessage struct {
@@ -169,9 +194,11 @@ type WSClassifiedMessage struct {
 }
 
 type WSClassifiedData struct {
-	Username        string  `json:"username"`
-	Message         string  `json:"message"`
-	ClassifiedLabel string  `json:"classified_label"`
-	Confidence      float64 `json:"confidence"`
-	Weight          int     `json:"weight"`
+	Username         string  `json:"username"`
+	Message          string  `json:"message"`
+	ClassifiedLabel  string  `json:"classified_label"`
+	Confidence       float64 `json:"confidence"`
+	Weight           float64 `json:"weight"`
+	DonationAmount   float64 `json:"donation_amount"`
+	DonationCurrency string  `json:"donation_currency"`
 }

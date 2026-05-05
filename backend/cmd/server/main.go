@@ -85,12 +85,18 @@ func main() {
 	wsHub := handler.NewWebSocketHub(getLB)
 	go wsHub.Run()
 
+	exchanger, err := service.NewExchangeRateService(cfg.ExchangeRates)
+	if err != nil {
+		log.Fatalf("create exchange rate service: %v", err)
+	}
+
 	voteProcessor := service.NewVoteProcessor(
 		cfg.VoteQueueCapacity,
 		cfg.ClassifierWorkers,
 		classifierClient,
 		tallyCache,
 		wsHub,
+		exchanger,
 	)
 	voteProcessor.Start()
 

@@ -159,10 +159,12 @@ func (c *Client) handleChatMessage(raw []byte) {
 	var msg struct {
 		Type string `json:"type"`
 		Data struct {
-			Username   string `json:"username"`
-			Message    string `json:"message"`
-			IsDonation bool   `json:"is_donation"`
-			BitsAmount int    `json:"bits_amount"`
+			Username          string  `json:"username"`
+			Message           string  `json:"message"`
+			IsDonation        bool    `json:"is_donation"`
+			BitsAmount        int     `json:"bits_amount"`
+			DonationAmount    float64 `json:"donation_amount"`
+			DonationCurrency  string  `json:"donation_currency"`
 		} `json:"data"`
 	}
 
@@ -184,11 +186,13 @@ func (c *Client) handleChatMessage(raw []byte) {
 	})
 
 	voteReq := model.SubmitVoteRequest{
-		TopicID:    c.topicID,
-		Username:   msg.Data.Username,
-		Message:    msg.Data.Message,
-		IsDonation: msg.Data.IsDonation,
-		BitsAmount: msg.Data.BitsAmount,
+		TopicID:           c.topicID,
+		Username:          msg.Data.Username,
+		Message:           msg.Data.Message,
+		IsDonation:        msg.Data.IsDonation,
+		BitsAmount:        msg.Data.BitsAmount,
+		DonationAmount:    msg.Data.DonationAmount,
+		DonationCurrency:  msg.Data.DonationCurrency,
 	}
 
 	payload, err := json.Marshal(voteReq)

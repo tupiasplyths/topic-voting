@@ -38,8 +38,7 @@ func (h *VoteHandler) Submit(c *gin.Context) {
 		return
 	}
 
-	weight, err := h.svc.SubmitVote(c.Request.Context(), &req)
-	if err != nil {
+	if err := h.svc.SubmitVote(c.Request.Context(), &req); err != nil {
 		if errors.Is(err, service.ErrTopicNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "topic_not_found"})
 			return
@@ -63,7 +62,6 @@ func (h *VoteHandler) Submit(c *gin.Context) {
 		"status":   "queued",
 		"topic_id": req.TopicID,
 		"username": req.Username,
-		"weight":   weight,
 	})
 }
 

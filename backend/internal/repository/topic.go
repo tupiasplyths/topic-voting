@@ -41,12 +41,13 @@ func (r *topicRepo) CreateWithTx(ctx context.Context, tx pgx.Tx, topic *model.To
 		Description:         topic.Description,
 		IsActive:            topic.IsActive,
 		ClassifierThreshold: topic.ClassifierThreshold,
+		VotingMode:          topic.VotingMode,
 	}
 	err := tx.QueryRow(ctx,
-		`INSERT INTO topics (title, description, is_active, classifier_threshold)
-		 VALUES ($1, $2, $3, $4)
+		`INSERT INTO topics (title, description, is_active, classifier_threshold, voting_mode)
+		 VALUES ($1, $2, $3, $4, $5)
 		 RETURNING id, created_at`,
-		created.Title, created.Description, created.IsActive, created.ClassifierThreshold,
+		created.Title, created.Description, created.IsActive, created.ClassifierThreshold, created.VotingMode,
 	).Scan(&created.ID, &created.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("insert topic: %w", err)
@@ -68,12 +69,13 @@ func (r *topicRepo) Create(ctx context.Context, topic *model.Topic) (*model.Topi
 		Description:         topic.Description,
 		IsActive:            topic.IsActive,
 		ClassifierThreshold: topic.ClassifierThreshold,
+		VotingMode:          topic.VotingMode,
 	}
 	err := r.pool.QueryRow(ctx,
-		`INSERT INTO topics (title, description, is_active, classifier_threshold)
-		 VALUES ($1, $2, $3, $4)
+		`INSERT INTO topics (title, description, is_active, classifier_threshold, voting_mode)
+		 VALUES ($1, $2, $3, $4, $5)
 		 RETURNING id, created_at`,
-		created.Title, created.Description, created.IsActive, created.ClassifierThreshold,
+		created.Title, created.Description, created.IsActive, created.ClassifierThreshold, created.VotingMode,
 	).Scan(&created.ID, &created.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("insert topic: %w", err)
@@ -91,7 +93,7 @@ func (r *topicRepo) DeactivateAll(ctx context.Context) error {
 
 func (r *topicRepo) List(ctx context.Context) ([]*model.Topic, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, title, description, is_active, classifier_threshold, created_at, closed_at
+		`SELECT id, title, description, is_active, classifier_threshold, voting_mode, created_at, closed_at
 		 FROM topics ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("list topics: %w", err)
@@ -101,7 +103,7 @@ func (r *topicRepo) List(ctx context.Context) ([]*model.Topic, error) {
 	topics := make([]*model.Topic, 0)
 	for rows.Next() {
 		t := &model.Topic{}
-		if err := rows.Scan(&t.ID, &t.Title, &t.Description, &t.IsActive, &t.ClassifierThreshold, &t.CreatedAt, &t.ClosedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.Title, &t.Description, &t.IsActive, &t.ClassifierThreshold, &t.VotingMode, &t.CreatedAt, &t.ClosedAt); err != nil {
 			return nil, fmt.Errorf("scan topic: %w", err)
 		}
 		topics = append(topics, t)
@@ -112,9 +114,9 @@ func (r *topicRepo) List(ctx context.Context) ([]*model.Topic, error) {
 func (r *topicRepo) GetActive(ctx context.Context) (*model.Topic, error) {
 	t := &model.Topic{}
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, title, description, is_active, classifier_threshold, created_at, closed_at
+		`SELECT id, title, description, is_active, classifier_threshold, voting_mode, created_at, closed_at
 		 FROM topics WHERE is_active = TRUE ORDER BY created_at DESC LIMIT 1`,
-	).Scan(&t.ID, &t.Title, &t.Description, &t.IsActive, &t.ClassifierThreshold, &t.CreatedAt, &t.ClosedAt)
+	).Scan(&t.ID, &t.Title, &t.Description, &t.IsActive, &t.ClassifierThreshold, &t.VotingMode, &t.CreatedAt, &t.ClosedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -127,9 +129,9 @@ func (r *topicRepo) GetActive(ctx context.Context) (*model.Topic, error) {
 func (r *topicRepo) GetByID(ctx context.Context, id uuid.UUID) (*model.Topic, error) {
 	t := &model.Topic{}
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, title, description, is_active, classifier_threshold, created_at, closed_at
+		`SELECT id, title, description, is_active, classifier_threshold, voting_mode, created_at, closed_at
 		 FROM topics WHERE id = $1`, id,
-	).Scan(&t.ID, &t.Title, &t.Description, &t.IsActive, &t.ClassifierThreshold, &t.CreatedAt, &t.ClosedAt)
+	).Scan(&t.ID, &t.Title, &t.Description, &t.IsActive, &t.ClassifierThreshold, &t.VotingMode, &t.CreatedAt, &t.ClosedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -144,9 +146,9 @@ func (r *topicRepo) Close(ctx context.Context, id uuid.UUID) (*model.Topic, erro
 	err := r.pool.QueryRow(ctx,
 		`UPDATE topics SET is_active = FALSE, closed_at = NOW()
 		 WHERE id = $1
-		 RETURNING id, title, description, is_active, classifier_threshold, created_at, closed_at`,
+		 RETURNING id, title, description, is_active, classifier_threshold, voting_mode, created_at, closed_at`,
 		id,
-	).Scan(&t.ID, &t.Title, &t.Description, &t.IsActive, &t.ClassifierThreshold, &t.CreatedAt, &t.ClosedAt)
+	).Scan(&t.ID, &t.Title, &t.Description, &t.IsActive, &t.ClassifierThreshold, &t.VotingMode, &t.CreatedAt, &t.ClosedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil

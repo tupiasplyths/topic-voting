@@ -11,7 +11,7 @@ import (
 )
 
 type VoteService interface {
-	SubmitVote(ctx context.Context, req *model.SubmitVoteRequest) (int, error)
+	SubmitVote(ctx context.Context, req *model.SubmitVoteRequest) error
 	GetLeaderboard(ctx context.Context, topicID uuid.UUID, limit int) (*model.Leaderboard, error)
 	GetLabels(topicID uuid.UUID) []string
 	MergeLabels(ctx context.Context, req *model.MergeLabelsRequest) (*model.MergeLabelsResponse, error)
@@ -44,16 +44,16 @@ func NewVoteService(
 	}
 }
 
-func (s *voteService) SubmitVote(ctx context.Context, req *model.SubmitVoteRequest) (int, error) {
+func (s *voteService) SubmitVote(ctx context.Context, req *model.SubmitVoteRequest) error {
 	topic, err := s.topicRepo.GetByID(ctx, req.TopicID)
 	if err != nil {
-		return 0, fmt.Errorf("get topic: %w", err)
+		return fmt.Errorf("get topic: %w", err)
 	}
 	if topic == nil {
-		return 0, ErrTopicNotFound
+		return ErrTopicNotFound
 	}
 	if !topic.IsActive {
-		return 0, ErrTopicNotActive
+		return ErrTopicNotActive
 	}
 
 	threshold := s.threshold
@@ -61,23 +61,20 @@ func (s *voteService) SubmitVote(ctx context.Context, req *model.SubmitVoteReque
 		threshold = topic.ClassifierThreshold
 	}
 
-	weight := computeWeight(req.IsDonation, req.BitsAmount)
-
 	pv := &PendingVote{
-		TopicID:    req.TopicID,
-		TopicTitle: topic.Title,
-		Username:   req.Username,
-		Message:    req.Message,
-		IsDonation: req.IsDonation,
-		BitsAmount: req.BitsAmount,
-		Threshold:  threshold,
+		TopicID:          req.TopicID,
+		TopicTitle:       topic.Title,
+		Username:         req.Username,
+		Message:          req.Message,
+		IsDonation:       req.IsDonation,
+		BitsAmount:       req.BitsAmount,
+		DonationAmount:   req.DonationAmount,
+		DonationCurrency: req.DonationCurrency,
+		Threshold:        threshold,
+		VotingMode:       topic.VotingMode,
 	}
 
-	if err := s.processor.Enqueue(pv); err != nil {
-		return 0, err
-	}
-
-	return weight, nil
+	return s.processor.Enqueue(pv)
 }
 
 func (s *voteService) GetLeaderboard(_ context.Context, topicID uuid.UUID, limit int) (*model.Leaderboard, error) {

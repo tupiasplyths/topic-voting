@@ -15,7 +15,7 @@ import (
 const flushBatchSize = 1000
 
 type LabelTally struct {
-	TotalWeight int
+	TotalWeight float64
 	VoteCount   int
 	LastVoteAt  time.Time
 }
@@ -23,6 +23,7 @@ type LabelTally struct {
 type TopicTally struct {
 	mu         sync.RWMutex
 	TopicTitle string
+	VotingMode string
 	Labels     map[string]*LabelTally
 }
 
@@ -54,14 +55,20 @@ func NewVoteTallyCache(ctx context.Context, repo repository.VoteRepository, flus
 	if err != nil {
 		return nil, err
 	}
-	topicNames := make(map[uuid.UUID]string)
+	type topicInfo struct {
+		title      string
+		votingMode string
+	}
+	topicMap := make(map[uuid.UUID]topicInfo)
 	for _, t := range topics {
-		topicNames[t.ID] = t.Title
+		topicMap[t.ID] = topicInfo{title: t.Title, votingMode: t.VotingMode}
 	}
 
 	for topicID, entries := range allTallies {
+		info := topicMap[topicID]
 		tt := &TopicTally{
-			TopicTitle: topicNames[topicID],
+			TopicTitle: info.title,
+			VotingMode: info.votingMode,
 			Labels:     make(map[string]*LabelTally),
 		}
 		for _, e := range entries {
@@ -87,12 +94,13 @@ func (c *VoteTallyCache) Stop() {
 	c.flush()
 }
 
-func (c *VoteTallyCache) Increment(topicID uuid.UUID, topicTitle, label string, weight int, vote *model.Vote) {
+func (c *VoteTallyCache) Increment(topicID uuid.UUID, topicTitle, votingMode, label string, weight float64, vote *model.Vote) {
 	c.mu.Lock()
 	tt, ok := c.tallies[topicID]
 	if !ok {
 		tt = &TopicTally{
 			TopicTitle: topicTitle,
+			VotingMode: votingMode,
 			Labels:     make(map[string]*LabelTally),
 		}
 		c.tallies[topicID] = tt
@@ -141,10 +149,11 @@ func (c *VoteTallyCache) GetLeaderboard(topicID uuid.UUID) (*model.Leaderboard, 
 	tt.mu.RUnlock()
 
 	return &model.Leaderboard{
-		TopicID:   topicID,
-		Topic:     tt.TopicTitle,
-		Entries:   entries,
-		UpdatedAt: time.Now(),
+		TopicID:    topicID,
+		Topic:      tt.TopicTitle,
+		VotingMode: tt.VotingMode,
+		Entries:    entries,
+		UpdatedAt:  time.Now(),
 	}, nil
 }
 

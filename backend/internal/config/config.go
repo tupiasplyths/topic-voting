@@ -29,6 +29,7 @@ type Config struct {
 	CORSAllowedOrigins    []string
 	LogLevel              string
 	AdminKey              string
+	ExchangeRates         string
 }
 
 func Load() (*Config, error) {
@@ -46,6 +47,7 @@ func Load() (*Config, error) {
 		CORSAllowedOrigins: parseOrigins(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:5442")),
 		LogLevel:           getEnv("LOG_LEVEL", "info"),
 		AdminKey:           getEnv("ADMIN_KEY", ""),
+		ExchangeRates:      getEnv("EXCHANGE_RATES", ""),
 	}
 
 	var err error
