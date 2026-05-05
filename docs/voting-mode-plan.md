@@ -247,6 +247,24 @@ File: `src/components/TopicManager.tsx`
 
 ---
 
+## Phase 11: Manual Chat Input
+
+File: `src/components/MockChat.tsx`
+
+- Refactor WebSocket lifecycle:
+  - Connect and maintain WS on mount/topic change (independent of simulation state)
+  - Simulation only controls the auto-generate timer
+- Add input bar at the bottom of the chat area:
+  - Message input (text field)
+  - Send button (and support Enter key)
+  - "Donate" inline button that opens `Amount` and `Currency` fields
+- Manual sending logic:
+  - Pick a random username from `USERNAMES` for every manual message
+  - Construct the message payload including `donation_amount` and `donation_currency` if toggled
+  - Send via `wsRef.current.send()`
+
+---
+
 ## Key Design Decisions
 
 | Decision | Choice |
@@ -282,7 +300,7 @@ File: `src/components/TopicManager.tsx`
 | `frontend/src/types/index.ts` | Add voting_mode fields |
 | `frontend/src/types/chat.ts` | Add donation fields |
 | `frontend/src/components/TopicManager.tsx` | Voting mode selector + badges |
-| `frontend/src/components/MockChat.tsx` | Pass donation fields |
+| `frontend/src/components/MockChat.tsx` | Pass donation fields + Manual Chat UI |
 | `frontend/src/utils/mockChat.ts` | Generate donation amounts |
 | `frontend/src/components/Leaderboard.tsx` | Badge + conditional formatting |
 | `frontend/src/components/VoteBarChart.tsx` | Accept voting_mode prop |
