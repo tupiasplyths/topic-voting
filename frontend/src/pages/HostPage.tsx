@@ -4,16 +4,17 @@ import Leaderboard from '../components/Leaderboard';
 import VoteBarChart from '../components/VoteBarChart';
 import ConnectionStatus from '../components/ConnectionStatus';
 import { useWebSocket } from '../hooks/useWebSocket';
-import type { Leaderboard as LeaderboardType, WSMessage } from '../types';
-import type { Topic } from '../types';
+import type { Leaderboard as LeaderboardType, WSMessage, VotingMode, Topic } from '../types';
 
 export default function HostPage() {
   const [activeTopic, setActiveTopic] = useState<Topic | null>(null);
   const [lbEntries, setLbEntries] = useState<LeaderboardType['entries']>([]);
+  const [lbVotingMode, setLbVotingMode] = useState<VotingMode>('chat');
 
   const handleMessage = (msg: WSMessage<LeaderboardType>) => {
     if (msg.type === 'leaderboard_update' && msg.data) {
       setLbEntries(msg.data.entries);
+      setLbVotingMode(msg.data.voting_mode);
     }
   };
 
@@ -46,7 +47,7 @@ export default function HostPage() {
                 <h3 className="text-sm font-medium text-gray-400 mb-3">
                   Chart View
                 </h3>
-                <VoteBarChart entries={lbEntries} />
+                <VoteBarChart entries={lbEntries} votingMode={lbVotingMode} />
               </div>
             </>
           ) : (

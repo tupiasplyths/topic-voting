@@ -1,15 +1,16 @@
 import { useRef, useEffect, useState } from 'react';
 import { Crown } from 'lucide-react';
-import type { LeaderboardEntry } from '../types';
+import type { LeaderboardEntry, VotingMode } from '../types';
 
 interface Props {
   entries: LeaderboardEntry[];
   maxEntries: number;
+  votingMode?: VotingMode;
 }
 
 const ITEM_HEIGHT = 56;
 
-export default function DisplayOverlay({ entries, maxEntries }: Props) {
+export default function DisplayOverlay({ entries, maxEntries, votingMode = 'chat' }: Props) {
   const [animatedPoints, setAnimatedPoints] = useState<Record<string, number>>({});
   const animationFrameRef = useRef<number | null>(null);
 
@@ -47,7 +48,7 @@ export default function DisplayOverlay({ entries, maxEntries }: Props) {
       for (const label of new Set([...Object.keys(startPoints), ...Object.keys(targetPoints)])) {
         const start = startPoints[label] ?? 0;
         const target = targetPoints[label] ?? 0;
-        next[label] = Math.round(start + (target - start) * eased);
+        next[label] = start + (target - start) * eased;
       }
 
       setAnimatedPoints(next);
@@ -73,7 +74,9 @@ export default function DisplayOverlay({ entries, maxEntries }: Props) {
         const points = animatedPoints[entry.label] ?? 0;
         const isRank1 = index === 0;
         const isNew = isNewEntry(entry.label);
-        const hasDonations = entry.vote_count !== entry.total_weight;
+        const formattedPoints = votingMode === 'donation'
+          ? `$${points.toFixed(2)}`
+          : `${Math.round(points)} pts`;
 
         return (
           <div
@@ -122,17 +125,13 @@ export default function DisplayOverlay({ entries, maxEntries }: Props) {
                   )}
                 </div>
                 <span className="text-gray-300 text-sm shrink-0 ml-2">
-                  {points} pts
+                  {formattedPoints}
                 </span>
               </div>
 
               <div className="h-4 bg-gray-800 rounded-full overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all duration-500 ease-out ${
-                    hasDonations
-                      ? 'bg-gradient-to-r from-indigo-500 to-purple-500'
-                      : 'bg-indigo-500'
-                  }`}
+                  className="h-full rounded-full bg-indigo-500 transition-all duration-500 ease-out"
                   style={{ width: `${pct}%` }}
                 />
               </div>

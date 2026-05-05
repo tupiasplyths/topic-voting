@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { getLeaderboard } from '../api/client';
 import DisplayOverlay from '../components/DisplayOverlay';
-import type { Leaderboard, WSMessage } from '../types';
+import type { Leaderboard, WSMessage, VotingMode } from '../types';
 
 export default function DisplayPage() {
   const [searchParams] = useSearchParams();
@@ -14,6 +14,7 @@ export default function DisplayPage() {
 
   const [entries, setEntries] = useState<Leaderboard['entries']>([]);
   const [topic, setTopic] = useState('');
+  const [votingMode, setVotingMode] = useState<VotingMode>('chat');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -25,6 +26,7 @@ export default function DisplayPage() {
         if (!cancelled) {
           setEntries(lb.entries);
           setTopic(lb.topic);
+          setVotingMode(lb.voting_mode);
           setLoading(false);
         }
       })
@@ -42,6 +44,7 @@ export default function DisplayPage() {
     if (msg.type === 'leaderboard_update' && msg.data) {
       setEntries(msg.data.entries);
       setTopic(msg.data.topic);
+      setVotingMode(msg.data.voting_mode);
     }
   };
 
@@ -82,7 +85,7 @@ export default function DisplayPage() {
           {topic}
         </h1>
       )}
-      <DisplayOverlay entries={entries} maxEntries={maxEntries} />
+      <DisplayOverlay entries={entries} maxEntries={maxEntries} votingMode={votingMode} />
     </div>
   );
 }

@@ -7,12 +7,13 @@ import {
   ResponsiveContainer,
   Cell,
 } from 'recharts';
-import type { LeaderboardEntry } from '../types';
+import type { LeaderboardEntry, VotingMode } from '../types';
 
 interface Props {
   entries: LeaderboardEntry[];
   maxEntries?: number;
   animated?: boolean;
+  votingMode?: VotingMode;
 }
 
 const COLORS = [
@@ -32,6 +33,7 @@ export default function VoteBarChart({
   entries,
   maxEntries = 10,
   animated = true,
+  votingMode = 'chat',
 }: Props) {
   const data = entries
     .slice(0, maxEntries)
@@ -74,7 +76,13 @@ export default function VoteBarChart({
             borderRadius: '8px',
             color: '#e5e7eb',
           }}
-          formatter={(value: number) => [`${value} pts`, 'Weight'] as [string, string]}
+          formatter={(value: number | string) => {
+            const num = typeof value === 'string' ? parseFloat(value) : value;
+            const label = votingMode === 'donation'
+              ? `$${num.toFixed(2)}`
+              : `${Math.round(num)} pts`;
+            return [label, 'Weight'] as [string, string];
+          }}
         />
         <Bar
           dataKey="value"

@@ -3,7 +3,7 @@ import { GitMerge, X } from 'lucide-react';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { getLeaderboard, mergeLabels } from '../api/client';
 import { useToast } from '../components/Toast';
-import type { Leaderboard, LeaderboardEntry, WSMessage } from '../types';
+import type { Leaderboard, LeaderboardEntry, WSMessage, VotingMode } from '../types';
 
 interface Props {
   topicId: string;
@@ -12,6 +12,7 @@ interface Props {
 export default function Leaderboard({ topicId }: Props) {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [topic, setTopic] = useState('');
+  const [votingMode, setVotingMode] = useState<VotingMode>('chat');
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -83,6 +84,7 @@ export default function Leaderboard({ topicId }: Props) {
         if (!cancelled) {
           setEntries(lb.entries);
           setTopic(lb.topic);
+          setVotingMode(lb.voting_mode);
           setUpdatedAt(lb.updated_at);
           setLoading(false);
         }
@@ -101,6 +103,7 @@ export default function Leaderboard({ topicId }: Props) {
     if (msg.type === 'leaderboard_update' && msg.data) {
       setEntries(msg.data.entries);
       setTopic(msg.data.topic);
+      setVotingMode(msg.data.voting_mode);
       setUpdatedAt(msg.data.updated_at);
     }
   };
@@ -133,6 +136,15 @@ export default function Leaderboard({ topicId }: Props) {
           {topic || 'Leaderboard'}
         </h2>
         <div className="flex items-center gap-3">
+          <span
+            className={`text-xs font-medium px-2 py-0.5 rounded ${
+              votingMode === 'donation'
+                ? 'bg-amber-900/50 text-amber-300 border border-amber-700'
+                : 'bg-blue-900/50 text-blue-300 border border-blue-700'
+            }`}
+          >
+            {votingMode === 'donation' ? 'Donation-voted' : 'Chat-voted'}
+          </span>
           {formattedTime && (
             <span className="text-xs text-gray-500">
               Updated {formattedTime}
@@ -207,7 +219,10 @@ export default function Leaderboard({ topicId }: Props) {
                         {i + 1}. {entry.label}
                       </span>
                       <span className="text-gray-400 text-xs">
-                        {entry.total_weight} pts &middot; {entry.vote_count}{' '}
+                        {votingMode === 'donation'
+                          ? `$${entry.total_weight.toFixed(2)}`
+                          : `${Math.round(entry.total_weight)} pts`}{' '}
+                        &middot; {entry.vote_count}{' '}
                         votes
                       </span>
                     </div>
