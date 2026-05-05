@@ -89,8 +89,10 @@ export default function MockChat({ topicId, topicTitle }: MockChatProps) {
           color: '',
           is_donation: false,
           bits_amount: 0,
+          donation_amount: 0,
+          donation_currency: '',
           timestamp: Date.now(),
-        } as ChatMessage,
+        },
       ];
       return next.length > 200 ? next.slice(next.length - 200) : next;
     });
@@ -114,11 +116,16 @@ export default function MockChat({ topicId, topicTitle }: MockChatProps) {
       let bits = 0;
       let item = '';
 
+      let donation_amount = 0;
+      let donation_currency = '';
+
       if (isDonation) {
         const result = generateDonationMessage(currentLabels, topicTitle || '');
         msg = result.message;
         bits = result.bits;
         item = result.item;
+        donation_amount = result.donation_amount;
+        donation_currency = result.donation_currency;
       } else {
         const result = generateMessage(currentLabels, topicTitle || '');
         msg = result.message;
@@ -132,8 +139,8 @@ export default function MockChat({ topicId, topicTitle }: MockChatProps) {
         color,
         is_donation: isDonation,
         bits_amount: bits,
-        donation_amount: 0,
-        donation_currency: '',
+        donation_amount,
+        donation_currency,
         timestamp: Date.now(),
         status: 'pending',
         classified_label: item,
@@ -322,6 +329,11 @@ export default function MockChat({ topicId, topicTitle }: MockChatProps) {
                 <span className="inline-flex items-center gap-0.5 ml-1 text-purple-400">
                   <Gem size={12} />
                   <span className="text-xs">x{msg.bits_amount}</span>
+                  {msg.donation_amount > 0 && (
+                    <span className="text-purple-300 ml-1">
+                      ${msg.donation_amount.toFixed(2)} {msg.donation_currency}
+                    </span>
+                  )}
                 </span>
               )}
               <span className="text-gray-300 ml-1">{msg.message}</span>

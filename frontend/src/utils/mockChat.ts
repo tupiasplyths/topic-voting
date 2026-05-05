@@ -75,14 +75,26 @@ export function generateMessage(labels: string[], _topic: string): { message: st
   };
 }
 
-export function generateDonationMessage(labels: string[], _topic: string): { message: string; item: string; bits: number } {
+const CURRENCIES = ['USD', 'CAD', 'EUR', 'GBP'] as const;
+
+export function generateDonationMessage(labels: string[], _topic: string): {
+  message: string;
+  item: string;
+  bits: number;
+  donation_amount: number;
+  donation_currency: string;
+} {
   const item = pickRandom(labels.length > 0 ? labels : GENERIC_ITEMS);
   const bits = [100, 500, 1000, 5000, 10000][Math.floor(Math.random() * 5)];
+  const donation_amount = (Math.floor(Math.random() * 100) + 1) * 5;
+  const donation_currency = pickRandom([...CURRENCIES]);
   const template = pickRandom(DONATION_TEMPLATES);
   return {
     message: template.replace(/{item}/g, item).replace(/{amount}/g, String(bits)),
     item,
     bits,
+    donation_amount,
+    donation_currency,
   };
 }
 
