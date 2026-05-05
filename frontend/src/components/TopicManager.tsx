@@ -16,6 +16,7 @@ export default function TopicManager({ onActiveTopicChange }: Props) {
   const [description, setDescription] = useState('');
   const [threshold, setThreshold] = useState(0.5);
   const [setActive, setSetActive] = useState(true);
+  const [votingMode, setVotingMode] = useState<'chat' | 'donation'>('chat');
   const [loading, setLoading] = useState(false);
   const [closing, setClosing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +53,7 @@ export default function TopicManager({ onActiveTopicChange }: Props) {
       const req: CreateTopicRequest = {
         title: title.trim(),
         description: description.trim(),
+        voting_mode: votingMode,
         classifier_threshold: threshold,
         set_active: setActive,
       };
@@ -103,6 +105,13 @@ export default function TopicManager({ onActiveTopicChange }: Props) {
               {activeTopic.description && (
                 <p className="text-sm text-gray-400">{activeTopic.description}</p>
               )}
+              <span className={`inline-block mt-1 text-xs px-1.5 py-0.5 rounded ${
+                activeTopic.voting_mode === 'donation'
+                  ? 'bg-amber-900 text-amber-300'
+                  : 'bg-blue-900 text-blue-300'
+              }`}>
+                {activeTopic.voting_mode === 'donation' ? 'Donation-voted' : 'Chat-voted'}
+              </span>
             </div>
             <button
               onClick={() => handleClose(activeTopic.id)}
@@ -159,6 +168,36 @@ export default function TopicManager({ onActiveTopicChange }: Props) {
           />
         </div>
 
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2">
+            Voting Mode
+          </label>
+          <div className="flex gap-4">
+            <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+              <input
+                type="radio"
+                name="voting_mode"
+                value="chat"
+                checked={votingMode === 'chat'}
+                onChange={() => setVotingMode('chat')}
+                className="accent-indigo-500"
+              />
+              Chat-voted
+            </label>
+            <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+              <input
+                type="radio"
+                name="voting_mode"
+                value="donation"
+                checked={votingMode === 'donation'}
+                onChange={() => setVotingMode('donation')}
+                className="accent-indigo-500"
+              />
+              Donation-voted
+            </label>
+          </div>
+        </div>
+
         <label className="flex items-center gap-2 text-sm text-gray-300">
           <input
             type="checkbox"
@@ -191,15 +230,26 @@ export default function TopicManager({ onActiveTopicChange }: Props) {
                 <span className={t.is_active ? 'text-white font-medium' : 'text-gray-400'}>
                   {t.title}
                 </span>
-                <span
-                  className={`text-xs px-2 py-0.5 rounded ${
-                    t.is_active
-                      ? 'bg-green-900 text-green-300'
-                      : 'bg-gray-700 text-gray-500'
-                  }`}
-                >
-                  {t.is_active ? 'Active' : 'Closed'}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`text-xs px-1.5 py-0.5 rounded ${
+                      t.voting_mode === 'donation'
+                        ? 'bg-amber-900/50 text-amber-400'
+                        : 'bg-blue-900/50 text-blue-400'
+                    }`}
+                  >
+                    {t.voting_mode === 'donation' ? 'Donation' : 'Chat'}
+                  </span>
+                  <span
+                    className={`text-xs px-2 py-0.5 rounded ${
+                      t.is_active
+                        ? 'bg-green-900 text-green-300'
+                        : 'bg-gray-700 text-gray-500'
+                    }`}
+                  >
+                    {t.is_active ? 'Active' : 'Closed'}
+                  </span>
+                </div>
               </li>
             ))}
           </ul>
