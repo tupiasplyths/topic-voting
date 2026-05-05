@@ -1,8 +1,11 @@
+export type VotingMode = 'chat' | 'donation';
+
 export interface Topic {
   id: string;
   title: string;
   description: string;
   is_active: boolean;
+  voting_mode: VotingMode;
   classifier_threshold: number;
   created_at: string;
   closed_at?: string;
@@ -11,12 +14,14 @@ export interface Topic {
 export interface CreateTopicRequest {
   title: string;
   description?: string;
+  voting_mode?: VotingMode;
   classifier_threshold?: number;
   set_active: boolean;
 }
 
 export interface LeaderboardEntry {
   label: string;
+  /** Summed vote weight (float64 from backend, DECIMAL(12,2) in DB) */
   total_weight: number;
   vote_count: number;
   last_vote_at: string;
@@ -25,6 +30,7 @@ export interface LeaderboardEntry {
 export interface Leaderboard {
   topic_id: string;
   topic: string;
+  voting_mode: VotingMode;
   entries: LeaderboardEntry[];
   updated_at: string;
 }

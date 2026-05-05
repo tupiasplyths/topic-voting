@@ -132,6 +132,8 @@ export default function MockChat({ topicId, topicTitle }: MockChatProps) {
         color,
         is_donation: isDonation,
         bits_amount: bits,
+        donation_amount: 0,
+        donation_currency: '',
         timestamp: Date.now(),
         status: 'pending',
         classified_label: item,
@@ -152,6 +154,8 @@ export default function MockChat({ topicId, topicTitle }: MockChatProps) {
               message: msg,
               is_donation: isDonation,
               bits_amount: bits,
+              donation_amount: chatMsg.donation_amount,
+              donation_currency: chatMsg.donation_currency,
             },
           }),
         );

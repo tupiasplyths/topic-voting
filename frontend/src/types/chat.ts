@@ -5,6 +5,8 @@ export interface ChatMessage {
   color: string;
   is_donation: boolean;
   bits_amount: number;
+  donation_amount: number;
+  donation_currency: string;
   timestamp: number;
   status?: 'pending' | 'classified';
   classified_label?: string;
