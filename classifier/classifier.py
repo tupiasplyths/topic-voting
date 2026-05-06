@@ -84,7 +84,7 @@ class VoteClassifier:
         result = self._pipeline(
             req.message,
             candidate_labels=req.existing_labels,
-            multi_label=False,
+            multi_label=True,
             truncation=True,
             max_length=self.max_length,
         )

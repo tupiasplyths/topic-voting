@@ -143,7 +143,7 @@ func main() {
 		}
 
 		ws, err := websocket.Accept(c.Writer, c.Request, &websocket.AcceptOptions{
-			OriginPatterns: cfg.CORSAllowedOrigins,
+			InsecureSkipVerify: true,
 		})
 		if err != nil {
 			return
@@ -164,7 +164,7 @@ func main() {
 		}
 
 		ws, err := websocket.Accept(c.Writer, c.Request, &websocket.AcceptOptions{
-			OriginPatterns: cfg.CORSAllowedOrigins,
+			InsecureSkipVerify: true,
 		})
 		if err != nil {
 			return

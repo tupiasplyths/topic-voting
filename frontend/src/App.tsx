@@ -8,7 +8,7 @@ import ChatPage from './pages/ChatPage';
 export default function App() {
   return (
     <ToastProvider>
-      <BrowserRouter>
+      <BrowserRouter basename="/web">
         <Routes>
           <Route
             path="/"

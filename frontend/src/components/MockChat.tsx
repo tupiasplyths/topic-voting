@@ -57,6 +57,8 @@ export default function MockChat({ topicId, topicTitle }: MockChatProps) {
     return () => clearInterval(interval);
   }, [topicId]);
 
+  const uuid = () => crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
   const addSystemMessage = (text: string) => {
     setMessages((prev) => {
       const next = [
@@ -81,8 +83,8 @@ export default function MockChat({ topicId, topicTitle }: MockChatProps) {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
     if (!topicId) return;
     setWsStatus('connecting');
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8585';
-    const wsUrl = apiUrl.replace('http', 'ws') + `/ws/chat?topic_id=${topicId}`;
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${wsProtocol}//${window.location.host}/ws/chat?topic_id=${topicId}`;
     const ws = new WebSocket(wsUrl);
     ws.onopen = () => {
       setWsStatus('connected');
@@ -180,7 +182,7 @@ export default function MockChat({ topicId, topicTitle }: MockChatProps) {
       }
 
       const chatMsg: ChatMessage = {
-        id: crypto.randomUUID(),
+        id: uuid(),
         username,
         message: msg,
         color,
@@ -210,7 +212,7 @@ export default function MockChat({ topicId, topicTitle }: MockChatProps) {
     const amount = isDonation ? Math.max(0, parseFloat(donationAmount) || 0) : 0;
 
     const chatMsg: ChatMessage = {
-      id: crypto.randomUUID(),
+      id: uuid(),
       username,
       message: inputText.trim(),
       color,

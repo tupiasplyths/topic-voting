@@ -13,9 +13,10 @@ services:
     ports: ["4747:4747"]
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4747/health"]
-      interval: 5s
-      retries: 10
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4747/health')"]
+      interval: 10s
+      retries: 15
+      start_period: 30s
 
   frontend:
     build: ./frontend
