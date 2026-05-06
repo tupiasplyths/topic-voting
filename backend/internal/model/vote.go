@@ -6,6 +6,11 @@ import (
 	"github.com/google/uuid"
 )
 
+// OffTopicSentinel is the label assigned to off-topic votes so they are
+// excluded from leaderboard tallies. Both the repository and cache layers
+// filter this label out of query results.
+const OffTopicSentinel = "__OFF_TOPIC__"
+
 type Vote struct {
 	ID              uuid.UUID `json:"id"`
 	TopicID         uuid.UUID `json:"topic_id"`

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"log"
 	"sync"
 	"time"
 
@@ -97,12 +98,19 @@ func (p *VoteProcessor) worker() {
 		case pv := <-p.enqueueCh:
 			labels := p.tallyCache.GetLabels(pv.TopicID)
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			clsResult, _ := p.classifier.Classify(
+			clsResult, err := p.classifier.Classify(
 				ctx, pv.Message, pv.TopicTitle, labels, pv.Threshold,
 			)
-			label := clsResult.Label
-			confidence := clsResult.Confidence
 			cancel()
+
+			label := "uncategorized"
+			confidence := 0.0
+			if err != nil {
+				log.Printf("[vote-processor] classify error for topic %s: %v", pv.TopicID, err)
+			} else {
+				label = clsResult.Label
+				confidence = clsResult.Confidence
+			}
 
 			vote := &model.Vote{
 				TopicID:         pv.TopicID,

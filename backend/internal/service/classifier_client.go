@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 )
@@ -58,33 +57,28 @@ func (c *classifierClient) Classify(ctx context.Context, message, topic string, 
 
 	payload, err := json.Marshal(body)
 	if err != nil {
-		log.Printf("[classifier] marshal error: %v", err)
-		return &ClassifyResult{Label: "uncategorized"}, nil
+		return nil, fmt.Errorf("classify marshal: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/classify", bytes.NewReader(payload))
 	if err != nil {
-		log.Printf("[classifier] create request error: %v", err)
-		return &ClassifyResult{Label: "uncategorized"}, nil
+		return nil, fmt.Errorf("classify create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		log.Printf("[classifier] request error: %v", err)
-		return &ClassifyResult{Label: "uncategorized"}, nil
+		return nil, fmt.Errorf("classify request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("[classifier] non-200 status: %d", resp.StatusCode)
-		return &ClassifyResult{Label: "uncategorized"}, nil
+		return nil, fmt.Errorf("classify returned status %d", resp.StatusCode)
 	}
 
 	var result classifyResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		log.Printf("[classifier] decode error: %v", err)
-		return &ClassifyResult{Label: "uncategorized"}, nil
+		return nil, fmt.Errorf("classify decode: %w", err)
 	}
 
 	return &ClassifyResult{

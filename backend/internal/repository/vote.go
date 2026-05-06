@@ -52,7 +52,7 @@ func (r *voteRepo) InsertBatch(ctx context.Context, votes []*model.Vote) error {
 	return nil
 }
 
-const offTopicSentinel = "__OFF_TOPIC__"
+const offTopicSentinel = model.OffTopicSentinel
 
 func (r *voteRepo) GetTalliesByTopic(ctx context.Context, topicID uuid.UUID) ([]model.LeaderboardEntry, error) {
 	rows, err := r.pool.Query(ctx,

@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log"
 	"strings"
 	"sync"
@@ -9,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/topic-voting/backend/internal/model"
 	"github.com/topic-voting/backend/internal/repository"
 )
 
@@ -91,6 +94,11 @@ func (s *LabelCleanupService) runCleanup() {
 }
 
 func (s *LabelCleanupService) cleanupTopic(ctx context.Context, topicID uuid.UUID, topicTitle string) {
+	// Note: There is an inherent TOCTOU race — the leaderboard is read here, but
+	// new labels may be added between this read and the subsequent merge operations.
+	// This is acceptable because cleanup is periodic and best-effort; any stale
+	// labels will be caught on the next cycle. The cache is always consistent with
+	// itself due to MergeLabels being applied atomically within the cache.
 	lb, err := s.tallyCache.GetLeaderboard(topicID)
 	if err != nil {
 		log.Printf("[label-cleanup] error fetching leaderboard for %s: %v", topicID, err)
@@ -105,7 +113,7 @@ func (s *LabelCleanupService) cleanupTopic(ctx context.Context, topicID uuid.UUI
 	labels := make([]string, 0, len(entries))
 	voteCounts := make(map[string]int, len(entries))
 	for _, e := range entries {
-		if e.Label == OffTopicSentinel {
+		if e.Label == model.OffTopicSentinel {
 			continue
 		}
 		labels = append(labels, e.Label)
@@ -119,20 +127,27 @@ func (s *LabelCleanupService) cleanupTopic(ctx context.Context, topicID uuid.UUI
 	totalBefore := len(labels)
 
 	classifyCtx, classifyCancel := context.WithTimeout(ctx, 10*time.Second)
-	result, err := s.classifier.Classify(classifyCtx, topicTitle, topicTitle, labels, 0.0)
+	// Use a descriptive prompt so the zero-shot classifier can meaningfully
+	// score each label's relevance to the topic (e.g. "This topic is about: Favorite Foods").
+	classifyMessage := fmt.Sprintf("This topic is about: %s", topicTitle)
+	result, err := s.classifier.Classify(classifyCtx, classifyMessage, topicTitle, labels, 0.0)
 	classifyCancel()
 
-	if err != nil || result.AllScores == nil {
-		log.Printf("[label-cleanup] classifier unavailable for topic %s, will retry later", topicID)
+	if err != nil {
+		log.Printf("[label-cleanup] classifier error for topic %s: %v, will retry later", topicID, err)
+		return
+	}
+	if result.AllScores == nil {
+		log.Printf("[label-cleanup] classifier returned no scores for topic %s, will retry later", topicID)
 		return
 	}
 
 	offTopic := s.findOffTopic(result.AllScores)
 	if len(offTopic) > 0 {
-		s.mergeLabels(ctx, topicID, offTopic, OffTopicSentinel)
+		s.mergeLabels(ctx, topicID, offTopic, model.OffTopicSentinel)
 		for _, l := range offTopic {
 			log.Printf("[label-cleanup]   off-topic: %q (relevance=%.2f) → merged into %s",
-				l, result.AllScores[l], OffTopicSentinel)
+				l, result.AllScores[l], model.OffTopicSentinel)
 		}
 		changes += len(offTopic)
 	}
@@ -184,6 +199,10 @@ func (s *LabelCleanupService) findOffTopic(scores map[string]float64) []string {
 	return off
 }
 
+// findSimilarGroups uses O(n²) pair-wise comparison to group labels whose
+// LevenshteinRatio meets the similarity threshold. Groups are computed via
+// connected components (BFS) on the similarity adjacency graph. Acceptable
+// because label count per topic is typically well under 100.
 func (s *LabelCleanupService) findSimilarGroups(labels []string, voteCounts map[string]int) [][]string {
 	norm := make([]string, len(labels))
 	for i, l := range labels {
@@ -317,9 +336,6 @@ func min3(a, b, c int) int {
 }
 
 func jsonLabels(labels []string) string {
-	quoted := make([]string, len(labels))
-	for i, l := range labels {
-		quoted[i] = `"` + l + `"`
-	}
-	return "[" + strings.Join(quoted, ", ") + "]"
+	b, _ := json.Marshal(labels)
+	return string(b)
 }

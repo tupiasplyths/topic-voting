@@ -164,7 +164,7 @@ func TestPickCanonical(t *testing.T) {
 
 	got = svc.pickCanonical([]string{"EqualA", "EqualB"}, map[string]int{"EqualA": 5, "EqualB": 5})
 	if got != "EqualA" {
-		t.Errorf("pickCanonical() want EqualA (tiebreaker by shorter), got %q", got)
+		t.Errorf("pickCanonical() want EqualA (tiebreaker: first in list), got %q", got)
 	}
 }
 
@@ -200,7 +200,7 @@ func TestExclude(t *testing.T) {
 
 func TestJsonLabels(t *testing.T) {
 	got := jsonLabels([]string{"Pizza", "Burger"})
-	want := `["Pizza", "Burger"]`
+	want := `["Pizza","Burger"]`
 	if got != want {
 		t.Errorf("jsonLabels() got %q, want %q", got, want)
 	}
