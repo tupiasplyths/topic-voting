@@ -101,13 +101,11 @@ func main() {
 	voteProcessor.Start()
 
 	labelCleanup := service.NewLabelCleanupService(
-		classifierClient,
 		voteRepo,
 		topicRepo,
 		tallyCache,
 		wsHub,
 		cfg.LabelCleanupInterval,
-		cfg.LabelCleanupThreshold,
 		cfg.LabelCleanupSimilarity,
 	)
 	labelCleanup.Start()

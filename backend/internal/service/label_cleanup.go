@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"strings"
 	"sync"
@@ -16,36 +15,30 @@ import (
 )
 
 type LabelCleanupService struct {
-	classifier ClassifierClient
 	voteRepo   repository.VoteRepository
 	topicRepo  repository.TopicRepository
 	tallyCache *VoteTallyCache
 	wsHub      WSBroadcaster
 	interval   time.Duration
-	threshold  float64
 	similarity float64
 	quit       chan struct{}
 	wg         sync.WaitGroup
 }
 
 func NewLabelCleanupService(
-	classifier ClassifierClient,
 	voteRepo repository.VoteRepository,
 	topicRepo repository.TopicRepository,
 	tallyCache *VoteTallyCache,
 	wsHub WSBroadcaster,
 	interval time.Duration,
-	threshold float64,
 	similarity float64,
 ) *LabelCleanupService {
 	return &LabelCleanupService{
-		classifier: classifier,
 		voteRepo:   voteRepo,
 		topicRepo:  topicRepo,
 		tallyCache: tallyCache,
 		wsHub:      wsHub,
 		interval:   interval,
-		threshold:  threshold,
 		similarity: similarity,
 		quit:       make(chan struct{}),
 	}
@@ -126,34 +119,7 @@ func (s *LabelCleanupService) cleanupTopic(ctx context.Context, topicID uuid.UUI
 	changes := 0
 	totalBefore := len(labels)
 
-	classifyCtx, classifyCancel := context.WithTimeout(ctx, 10*time.Second)
-	// Use a descriptive prompt so the zero-shot classifier can meaningfully
-	// score each label's relevance to the topic (e.g. "This topic is about: Favorite Foods").
-	classifyMessage := fmt.Sprintf("This topic is about: %s", topicTitle)
-	result, err := s.classifier.Classify(classifyCtx, classifyMessage, topicTitle, labels, 0.0)
-	classifyCancel()
-
-	if err != nil {
-		log.Printf("[label-cleanup] classifier error for topic %s: %v, will retry later", topicID, err)
-		return
-	}
-	if result.AllScores == nil {
-		log.Printf("[label-cleanup] classifier returned no scores for topic %s, will retry later", topicID)
-		return
-	}
-
-	offTopic := s.findOffTopic(result.AllScores)
-	if len(offTopic) > 0 {
-		s.mergeLabels(ctx, topicID, offTopic, model.OffTopicSentinel)
-		for _, l := range offTopic {
-			log.Printf("[label-cleanup]   off-topic: %q (relevance=%.2f) → merged into %s",
-				l, result.AllScores[l], model.OffTopicSentinel)
-		}
-		changes += len(offTopic)
-	}
-
-	remaining := exclude(labels, offTopic)
-	groups := s.findSimilarGroups(remaining, voteCounts)
+	groups := s.findSimilarGroups(labels, voteCounts)
 	for _, g := range groups {
 		if len(g) < 2 {
 			continue
@@ -187,16 +153,6 @@ func (s *LabelCleanupService) mergeLabels(ctx context.Context, topicID uuid.UUID
 	}
 	s.tallyCache.MergeLabels(topicID, sources, target)
 	go s.wsHub.BroadcastLeaderboard(topicID)
-}
-
-func (s *LabelCleanupService) findOffTopic(scores map[string]float64) []string {
-	var off []string
-	for label, score := range scores {
-		if score < s.threshold {
-			off = append(off, label)
-		}
-	}
-	return off
 }
 
 // findSimilarGroups uses O(n²) pair-wise comparison to group labels whose
@@ -308,21 +264,6 @@ func levenshteinRatio(a, b string) float64 {
 		return 1.0
 	}
 	return 1.0 - float64(dist)/float64(maxLen)
-}
-
-func exclude(all, remove []string) []string {
-	rm := make(map[string]bool, len(remove))
-	for _, r := range remove {
-		rm[r] = true
-	}
-	j := 0
-	for _, v := range all {
-		if !rm[v] {
-			all[j] = v
-			j++
-		}
-	}
-	return all[:j]
 }
 
 func min3(a, b, c int) int {

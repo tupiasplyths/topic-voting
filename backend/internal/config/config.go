@@ -31,7 +31,6 @@ type Config struct {
 	AdminKey                 string
 	ExchangeRates            string
 	LabelCleanupInterval     time.Duration
-	LabelCleanupThreshold    float64
 	LabelCleanupSimilarity   float64
 }
 
@@ -99,11 +98,6 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("LABEL_CLEANUP_INTERVAL_MIN: %w", err)
 	}
 	cfg.LabelCleanupInterval = time.Duration(cleanupMin) * time.Minute
-
-	cfg.LabelCleanupThreshold, err = getEnvFloat("LABEL_CLEANUP_THRESHOLD", 0.30)
-	if err != nil {
-		return nil, fmt.Errorf("LABEL_CLEANUP_THRESHOLD: %w", err)
-	}
 
 	cfg.LabelCleanupSimilarity, err = getEnvFloat("LABEL_CLEANUP_SIMILARITY", 0.80)
 	if err != nil {

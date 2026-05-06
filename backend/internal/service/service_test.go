@@ -168,36 +168,6 @@ func TestPickCanonical(t *testing.T) {
 	}
 }
 
-func TestFindOffTopic(t *testing.T) {
-	svc := &LabelCleanupService{threshold: 0.30}
-	scores := map[string]float64{
-		"Pizza":             0.85,
-		"Burgers":           0.72,
-		"Quantum Physics":   0.12,
-		"Mars Exploration":  0.05,
-		"Sushi":             0.45,
-	}
-
-	off := svc.findOffTopic(scores)
-	if len(off) != 2 {
-		t.Errorf("findOffTopic() want 2 off-topic, got %d: %v", len(off), off)
-	}
-
-	for _, label := range off {
-		if label == "Pizza" || label == "Burgers" || label == "Sushi" {
-			t.Errorf("findOffTopic() wrong label eliminated: %q", label)
-		}
-	}
-}
-
-func TestExclude(t *testing.T) {
-	all := []string{"a", "b", "c", "d"}
-	got := exclude(all, []string{"b", "d"})
-	if len(got) != 2 || got[0] != "a" || got[1] != "c" {
-		t.Errorf("exclude() got %v", got)
-	}
-}
-
 func TestJsonLabels(t *testing.T) {
 	got := jsonLabels([]string{"Pizza", "Burger"})
 	want := `["Pizza","Burger"]`
