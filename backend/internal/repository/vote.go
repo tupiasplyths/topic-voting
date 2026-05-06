@@ -52,12 +52,14 @@ func (r *voteRepo) InsertBatch(ctx context.Context, votes []*model.Vote) error {
 	return nil
 }
 
+const offTopicSentinel = "__OFF_TOPIC__"
+
 func (r *voteRepo) GetTalliesByTopic(ctx context.Context, topicID uuid.UUID) ([]model.LeaderboardEntry, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT classified_label, SUM(weight) AS total_weight, COUNT(*) AS vote_count, MAX(created_at) AS last_vote_at
-		 FROM votes WHERE topic_id = $1
+		 FROM votes WHERE topic_id = $1 AND classified_label != $2
 		 GROUP BY classified_label
-		 ORDER BY total_weight DESC`, topicID)
+		 ORDER BY total_weight DESC`, topicID, offTopicSentinel)
 	if err != nil {
 		return nil, fmt.Errorf("get tallies: %w", err)
 	}
@@ -77,8 +79,9 @@ func (r *voteRepo) GetTalliesByTopic(ctx context.Context, topicID uuid.UUID) ([]
 func (r *voteRepo) GetAllTallies(ctx context.Context) (map[uuid.UUID][]model.LeaderboardEntry, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT topic_id, classified_label, SUM(weight) AS total_weight, COUNT(*) AS vote_count, MAX(created_at) AS last_vote_at
-		 FROM votes GROUP BY topic_id, classified_label
-		 ORDER BY topic_id, total_weight DESC`)
+		 FROM votes WHERE classified_label != $1
+		 GROUP BY topic_id, classified_label
+		 ORDER BY topic_id, total_weight DESC`, offTopicSentinel)
 	if err != nil {
 		return nil, fmt.Errorf("get all tallies: %w", err)
 	}

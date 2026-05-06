@@ -78,3 +78,130 @@ func TestComputeWeight_DonationMode_DonationAmount_UnknownCurrency(t *testing.T)
 		t.Fatalf("expected 50.0, got %f", w)
 	}
 }
+
+func TestLevenshteinRatio(t *testing.T) {
+	tests := []struct {
+		a, b string
+		want float64
+	}{
+		{"", "", 1.0},
+		{"abc", "abc", 1.0},
+		{"ABC", "abc", 0.0},
+		{"Burger", "Burgers", 0.857},
+		{"Pizza", "pizza", 0.800},
+		{"Pizza", "Pizzas", 0.833},
+		{"Cheese", "Cheesy", 0.833},
+		{"A", "B", 0.0},
+		{"abc", "xyz", 0.0},
+	}
+
+	for _, tt := range tests {
+		got := levenshteinRatio(tt.a, tt.b)
+		delta := got - tt.want
+		if delta < 0 {
+			delta = -delta
+		}
+		if delta > 0.001 {
+			t.Errorf("levenshteinRatio(%q, %q) = %.3f, want %.3f", tt.a, tt.b, got, tt.want)
+		}
+	}
+}
+
+func TestFindSimilarGroups(t *testing.T) {
+	svc := &LabelCleanupService{similarity: 0.80}
+	counts := map[string]int{"Burger": 10, "Burgers": 3, "Pizza": 20, "Pizzas": 5, "Cheese": 8, "Bread": 4}
+
+	tests := []struct {
+		name   string
+		labels []string
+		want   int
+	}{
+		{
+			name:   "two similar pairs",
+			labels: []string{"Burger", "Burgers", "Pizza", "Pizzas", "Cheese", "Bread"},
+			want:   2,
+		},
+		{
+			name:   "exact duplicates (case-insensitive via norm)",
+			labels: []string{"pizza", "Pizza"},
+			want:   1,
+		},
+		{
+			name:   "no similar labels",
+			labels: []string{"Pizza", "Burger", "Cheese"},
+			want:   0,
+		},
+		{
+			name:   "transitive chain: A~B, B~C",
+			labels: []string{"hellp", "hello", "helo"},
+			want:   1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			groups := svc.findSimilarGroups(tt.labels, counts)
+			if len(groups) != tt.want {
+				t.Errorf("findSimilarGroups() got %d groups, want %d", len(groups), tt.want)
+			}
+		})
+	}
+}
+
+func TestPickCanonical(t *testing.T) {
+	svc := &LabelCleanupService{}
+	counts := map[string]int{"Burger": 10, "Burgers": 3, "Pizza": 20, "pizza": 5}
+
+	got := svc.pickCanonical([]string{"Burgers", "Burger"}, counts)
+	if got != "Burger" {
+		t.Errorf("pickCanonical() want Burger, got %q", got)
+	}
+
+	got = svc.pickCanonical([]string{"pizza", "Pizza"}, counts)
+	if got != "Pizza" {
+		t.Errorf("pickCanonical() want Pizza, got %q", got)
+	}
+
+	got = svc.pickCanonical([]string{"EqualA", "EqualB"}, map[string]int{"EqualA": 5, "EqualB": 5})
+	if got != "EqualA" {
+		t.Errorf("pickCanonical() want EqualA (tiebreaker by shorter), got %q", got)
+	}
+}
+
+func TestFindOffTopic(t *testing.T) {
+	svc := &LabelCleanupService{threshold: 0.30}
+	scores := map[string]float64{
+		"Pizza":             0.85,
+		"Burgers":           0.72,
+		"Quantum Physics":   0.12,
+		"Mars Exploration":  0.05,
+		"Sushi":             0.45,
+	}
+
+	off := svc.findOffTopic(scores)
+	if len(off) != 2 {
+		t.Errorf("findOffTopic() want 2 off-topic, got %d: %v", len(off), off)
+	}
+
+	for _, label := range off {
+		if label == "Pizza" || label == "Burgers" || label == "Sushi" {
+			t.Errorf("findOffTopic() wrong label eliminated: %q", label)
+		}
+	}
+}
+
+func TestExclude(t *testing.T) {
+	all := []string{"a", "b", "c", "d"}
+	got := exclude(all, []string{"b", "d"})
+	if len(got) != 2 || got[0] != "a" || got[1] != "c" {
+		t.Errorf("exclude() got %v", got)
+	}
+}
+
+func TestJsonLabels(t *testing.T) {
+	got := jsonLabels([]string{"Pizza", "Burger"})
+	want := `["Pizza", "Burger"]`
+	if got != want {
+		t.Errorf("jsonLabels() got %q, want %q", got, want)
+	}
+}

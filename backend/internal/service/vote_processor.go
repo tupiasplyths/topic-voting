@@ -97,9 +97,11 @@ func (p *VoteProcessor) worker() {
 		case pv := <-p.enqueueCh:
 			labels := p.tallyCache.GetLabels(pv.TopicID)
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			label, confidence := p.classifier.Classify(
+			clsResult, _ := p.classifier.Classify(
 				ctx, pv.Message, pv.TopicTitle, labels, pv.Threshold,
 			)
+			label := clsResult.Label
+			confidence := clsResult.Confidence
 			cancel()
 
 			vote := &model.Vote{

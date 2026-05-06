@@ -100,6 +100,18 @@ func main() {
 	)
 	voteProcessor.Start()
 
+	labelCleanup := service.NewLabelCleanupService(
+		classifierClient,
+		voteRepo,
+		topicRepo,
+		tallyCache,
+		wsHub,
+		cfg.LabelCleanupInterval,
+		cfg.LabelCleanupThreshold,
+		cfg.LabelCleanupSimilarity,
+	)
+	labelCleanup.Start()
+
 	topicSvc := service.NewTopicService(topicRepo)
 	voteSvc := service.NewVoteService(topicRepo, voteRepo, voteProcessor, tallyCache, wsHub, cfg.ClassifierThreshold)
 
@@ -198,6 +210,7 @@ func main() {
 
 	wsHub.Stop()
 	voteProcessor.Stop()
+	labelCleanup.Stop()
 	tallyCache.Stop()
 
 	log.Println("closing database connection...")

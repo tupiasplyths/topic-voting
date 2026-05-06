@@ -11,25 +11,28 @@ import (
 )
 
 type Config struct {
-	ServerPort            string
-	DBHost                string
-	DBPort                string
-	DBUser                string
-	DBPassword            string
-	DBName                string
-	DBSSLMode             string
-	ClassifierURL         string
-	ClassifierThreshold   float64
-	ClassifierTimeout     time.Duration
-	VoteQueueCapacity     int
-	ClassifierWorkers     int
-	DBFlushInterval       time.Duration
-	WSPingInterval        time.Duration
-	WSPongTimeout         time.Duration
-	CORSAllowedOrigins    []string
-	LogLevel              string
-	AdminKey              string
-	ExchangeRates         string
+	ServerPort               string
+	DBHost                   string
+	DBPort                   string
+	DBUser                   string
+	DBPassword               string
+	DBName                   string
+	DBSSLMode                string
+	ClassifierURL            string
+	ClassifierThreshold      float64
+	ClassifierTimeout        time.Duration
+	VoteQueueCapacity        int
+	ClassifierWorkers        int
+	DBFlushInterval          time.Duration
+	WSPingInterval           time.Duration
+	WSPongTimeout            time.Duration
+	CORSAllowedOrigins       []string
+	LogLevel                 string
+	AdminKey                 string
+	ExchangeRates            string
+	LabelCleanupInterval     time.Duration
+	LabelCleanupThreshold    float64
+	LabelCleanupSimilarity   float64
 }
 
 func Load() (*Config, error) {
@@ -90,6 +93,22 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("WS_PONG_TIMEOUT_S: %w", err)
 	}
 	cfg.WSPongTimeout = time.Duration(pongSec) * time.Second
+
+	cleanupMin, err := getEnvInt("LABEL_CLEANUP_INTERVAL_MIN", 5)
+	if err != nil {
+		return nil, fmt.Errorf("LABEL_CLEANUP_INTERVAL_MIN: %w", err)
+	}
+	cfg.LabelCleanupInterval = time.Duration(cleanupMin) * time.Minute
+
+	cfg.LabelCleanupThreshold, err = getEnvFloat("LABEL_CLEANUP_THRESHOLD", 0.30)
+	if err != nil {
+		return nil, fmt.Errorf("LABEL_CLEANUP_THRESHOLD: %w", err)
+	}
+
+	cfg.LabelCleanupSimilarity, err = getEnvFloat("LABEL_CLEANUP_SIMILARITY", 0.80)
+	if err != nil {
+		return nil, fmt.Errorf("LABEL_CLEANUP_SIMILARITY: %w", err)
+	}
 
 	return cfg, nil
 }

@@ -12,7 +12,10 @@ import (
 	"github.com/topic-voting/backend/internal/repository"
 )
 
-const flushBatchSize = 1000
+const (
+	flushBatchSize   = 1000
+	OffTopicSentinel = "__OFF_TOPIC__"
+)
 
 type LabelTally struct {
 	TotalWeight float64
@@ -139,6 +142,9 @@ func (c *VoteTallyCache) GetLeaderboard(topicID uuid.UUID) (*model.Leaderboard, 
 	tt.mu.RLock()
 	entries := make([]model.LeaderboardEntry, 0, len(tt.Labels))
 	for label, lt := range tt.Labels {
+		if label == OffTopicSentinel {
+			continue
+		}
 		entries = append(entries, model.LeaderboardEntry{
 			Label:       label,
 			TotalWeight: lt.TotalWeight,
@@ -169,6 +175,9 @@ func (c *VoteTallyCache) GetLabels(topicID uuid.UUID) []string {
 	tt.mu.RLock()
 	labels := make([]string, 0, len(tt.Labels))
 	for label := range tt.Labels {
+		if label == OffTopicSentinel {
+			continue
+		}
 		labels = append(labels, label)
 	}
 	tt.mu.RUnlock()
@@ -208,6 +217,38 @@ func (c *VoteTallyCache) MergeLabels(topicID uuid.UUID, sourceLabels []string, t
 			target.LastVoteAt = lt.LastVoteAt
 		}
 		delete(tt.Labels, src)
+	}
+}
+
+type TopicSnapshot struct {
+	TopicID    uuid.UUID
+	TopicTitle string
+	VotingMode string
+	Labels     map[string]LabelTally
+}
+
+func (c *VoteTallyCache) ForEachTopic(fn func(TopicSnapshot)) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	for id, tt := range c.tallies {
+		tt.mu.RLock()
+		labels := make(map[string]LabelTally, len(tt.Labels))
+		for k, v := range tt.Labels {
+			labels[k] = LabelTally{
+				TotalWeight: v.TotalWeight,
+				VoteCount:   v.VoteCount,
+				LastVoteAt:  v.LastVoteAt,
+			}
+		}
+		tt.mu.RUnlock()
+
+		fn(TopicSnapshot{
+			TopicID:    id,
+			TopicTitle: tt.TopicTitle,
+			VotingMode: tt.VotingMode,
+			Labels:     labels,
+		})
 	}
 }
 
