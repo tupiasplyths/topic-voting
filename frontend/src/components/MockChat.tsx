@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Gem, Play, Square, Zap, Trash2 } from 'lucide-react';
+import { Gem, Play, Square, Zap, Trash2, Send, DollarSign } from 'lucide-react';
 import type { ChatMessage, ChatSpeed } from '../types/chat';
 import {
   generateMessage,
@@ -7,6 +7,8 @@ import {
   getRandomUsername,
   getUsernameColor,
   getSpeedRangeMs,
+  pickRandom,
+  USERNAMES,
 } from '../utils/mockChat';
 import { getLabels } from '../api/client';
 
@@ -22,6 +24,12 @@ export default function MockChat({ topicId, topicTitle }: MockChatProps) {
   const [labels, setLabels] = useState<string[]>([]);
   const [msgCount, setMsgCount] = useState(0);
   const [wsStatus, setWsStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected');
+
+  const [inputText, setInputText] = useState('');
+  const [isDonating, setIsDonating] = useState(false);
+  const [donationAmount, setDonationAmount] = useState('');
+  const [donationCurrency, setDonationCurrency] = useState('USD');
+
   const wsRef = useRef<WebSocket | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -49,35 +57,6 @@ export default function MockChat({ topicId, topicTitle }: MockChatProps) {
     return () => clearInterval(interval);
   }, [topicId]);
 
-  const connectWs = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) return;
-    setWsStatus('connecting');
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8585';
-    const wsUrl = apiUrl.replace('http', 'ws') + `/ws/chat?topic_id=${topicId}`;
-    const ws = new WebSocket(wsUrl);
-    ws.onopen = () => {
-      setWsStatus('connected');
-      reconnectDelayRef.current = 1000;
-      addSystemMessage('Connected to chat');
-    };
-    ws.onclose = () => {
-      setWsStatus('disconnected');
-      wsRef.current = null;
-      if (isRunningRef.current) {
-        const delay = reconnectDelayRef.current;
-        reconnectDelayRef.current = Math.min(delay * 2, 30000);
-        setTimeout(() => {
-          if (isRunningRef.current) connectWs();
-        }, delay);
-      }
-    };
-    ws.onerror = () => {
-      setWsStatus('disconnected');
-      wsRef.current = null;
-    };
-    wsRef.current = ws;
-  }, [topicId]);
-
   const addSystemMessage = (text: string) => {
     setMessages((prev) => {
       const next = [
@@ -98,6 +77,75 @@ export default function MockChat({ topicId, topicTitle }: MockChatProps) {
     });
   };
 
+  const connectWs = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+    if (!topicId) return;
+    setWsStatus('connecting');
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8585';
+    const wsUrl = apiUrl.replace('http', 'ws') + `/ws/chat?topic_id=${topicId}`;
+    const ws = new WebSocket(wsUrl);
+    ws.onopen = () => {
+      setWsStatus('connected');
+      reconnectDelayRef.current = 1000;
+      addSystemMessage('Connected to chat');
+    };
+    ws.onclose = () => {
+      setWsStatus('disconnected');
+      wsRef.current = null;
+      const delay = reconnectDelayRef.current;
+      reconnectDelayRef.current = Math.min(delay * 2, 30000);
+      setTimeout(() => {
+        connectWs();
+      }, delay);
+    };
+    ws.onerror = () => {
+      setWsStatus('disconnected');
+      wsRef.current = null;
+    };
+    wsRef.current = ws;
+  }, [topicId]);
+
+  useEffect(() => {
+    if (!topicId) {
+      wsRef.current?.close();
+      wsRef.current = null;
+      setWsStatus('disconnected');
+      return;
+    }
+    connectWs();
+    return () => {
+      wsRef.current?.close();
+      wsRef.current = null;
+    };
+  }, [topicId, connectWs]);
+
+  const sendWsMessage = (chatMsg: ChatMessage) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(
+        JSON.stringify({
+          type: 'chat_message',
+          data: {
+            username: chatMsg.username,
+            message: chatMsg.message,
+            is_donation: chatMsg.is_donation,
+            bits_amount: chatMsg.bits_amount,
+            donation_amount: chatMsg.donation_amount,
+            donation_currency: chatMsg.donation_currency,
+          },
+        }),
+      );
+    }
+  };
+
+  const addMessage = (chatMsg: ChatMessage) => {
+    setMessages((prev) => {
+      const next = [...prev, chatMsg];
+      return next.length > 200 ? next.slice(next.length - 200) : next;
+    });
+    setMsgCount((c) => c + 1);
+    sendWsMessage(chatMsg);
+  };
+
   const scheduleNext = useCallback(() => {
     if (!isRunningRef.current || !topicIdRef.current) return;
 
@@ -115,7 +163,6 @@ export default function MockChat({ topicId, topicTitle }: MockChatProps) {
       let msg: string;
       let bits = 0;
       let item = '';
-
       let donation_amount = 0;
       let donation_currency = '';
 
@@ -146,36 +193,52 @@ export default function MockChat({ topicId, topicTitle }: MockChatProps) {
         classified_label: item,
       };
 
-      setMessages((prev) => {
-        const next = [...prev, chatMsg];
-        return next.length > 200 ? next.slice(next.length - 200) : next;
-      });
-      setMsgCount((c) => c + 1);
-
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(
-          JSON.stringify({
-            type: 'chat_message',
-            data: {
-              username,
-              message: msg,
-              is_donation: isDonation,
-              bits_amount: bits,
-              donation_amount: chatMsg.donation_amount,
-              donation_currency: chatMsg.donation_currency,
-            },
-          }),
-        );
-      }
-
+      addMessage(chatMsg);
       scheduleNext();
     }, delay);
   }, []);
 
+  const handleManualSend = () => {
+    if (!inputText.trim() || !topicId) return;
+
+    const username = pickRandom(USERNAMES);
+    const color = getUsernameColor(username);
+    const currentLabels = labelsRef.current;
+    const item = currentLabels.length > 0 ? pickRandom(currentLabels) : '';
+
+    const isDonation = isDonating && donationAmount.trim() !== '';
+    const amount = isDonation ? Math.max(0, parseFloat(donationAmount) || 0) : 0;
+
+    const chatMsg: ChatMessage = {
+      id: crypto.randomUUID(),
+      username,
+      message: inputText.trim(),
+      color,
+      is_donation: isDonation,
+      bits_amount: 0,
+      donation_amount: amount,
+      donation_currency: isDonation ? donationCurrency : '',
+      timestamp: Date.now(),
+      status: 'pending',
+      classified_label: item,
+    };
+
+    addMessage(chatMsg);
+    setInputText('');
+    setIsDonating(false);
+    setDonationAmount('');
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleManualSend();
+    }
+  };
+
   const startSimulation = () => {
     if (!topicId) return;
     setIsRunning(true);
-    connectWs();
     addSystemMessage('Simulation started');
   };
 
@@ -203,18 +266,6 @@ export default function MockChat({ topicId, topicTitle }: MockChatProps) {
       }
     };
   }, [isRunning, speed, scheduleNext]);
-
-  useEffect(() => {
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
-    }
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-    if (isRunning) connectWs();
-  }, [topicId]);
 
   useEffect(() => {
     return () => {
@@ -327,8 +378,12 @@ export default function MockChat({ topicId, topicTitle }: MockChatProps) {
               </span>
               {msg.is_donation && (
                 <span className="inline-flex items-center gap-0.5 ml-1 text-purple-400">
-                  <Gem size={12} />
-                  <span className="text-xs">x{msg.bits_amount}</span>
+                  {msg.bits_amount > 0 && (
+                    <>
+                      <Gem size={12} />
+                      <span className="text-xs">x{msg.bits_amount}</span>
+                    </>
+                  )}
                   {msg.donation_amount > 0 && (
                     <span className="text-purple-300 ml-1">
                       ${msg.donation_amount.toFixed(2)} {msg.donation_currency}
@@ -341,6 +396,60 @@ export default function MockChat({ topicId, topicTitle }: MockChatProps) {
           );
         })}
         <div ref={messagesEndRef} />
+      </div>
+
+      <div className="border-t border-gray-800 px-3 py-2 space-y-2">
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Type a message..."
+            className="flex-1 bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          />
+          <button
+            onClick={() => setIsDonating(!isDonating)}
+            className={`flex items-center gap-1 px-2 py-1.5 rounded text-xs font-medium transition-colors ${
+              isDonating
+                ? 'bg-purple-600 text-white'
+                : 'text-gray-400 hover:text-white hover:bg-gray-800'
+            }`}
+          >
+            <DollarSign size={14} />
+            Donate
+          </button>
+          <button
+            onClick={handleManualSend}
+            disabled={!inputText.trim() || wsStatus !== 'connected'}
+            className="flex items-center gap-1 px-3 py-1.5 rounded text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            <Send size={14} />
+          </button>
+        </div>
+        {isDonating && (
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              value={donationAmount}
+              onChange={(e) => setDonationAmount(e.target.value)}
+              placeholder="Amount"
+              min="0"
+              step="0.01"
+              className="w-24 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            />
+            <select
+              value={donationCurrency}
+              onChange={(e) => setDonationCurrency(e.target.value)}
+              className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            >
+              <option value="USD">USD</option>
+              <option value="CAD">CAD</option>
+              <option value="EUR">EUR</option>
+              <option value="GBP">GBP</option>
+            </select>
+          </div>
+        )}
       </div>
     </div>
   );
