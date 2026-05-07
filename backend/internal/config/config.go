@@ -54,7 +54,7 @@ func Load() (*Config, error) {
 
 	var err error
 
-	cfg.ClassifierThreshold, err = getEnvFloat("CLASSIFIER_THRESHOLD", 0.5)
+	cfg.ClassifierThreshold, err = getEnvFloat("CLASSIFIER_THRESHOLD", 0.7)
 	if err != nil {
 		return nil, fmt.Errorf("CLASSIFIER_THRESHOLD: %w", err)
 	}
