@@ -51,7 +51,7 @@ class TestClassifyExisting:
         }
 
         req = ClassifyRequest(
-            message="I love pizza",
+            message="I really enjoy Italian flatbread with cheese",
             topic="Best Food",
             existing_labels=["Pizza", "Sushi", "Burger"],
             threshold=0.5,
@@ -70,7 +70,7 @@ class TestClassifyExisting:
         }
 
         req = ClassifyRequest(
-            message="I like sushi",
+            message="I like raw fish on seasoned rice",
             topic="Best Food",
             existing_labels=["Sushi", "Pizza"],
             threshold=0.5,
@@ -78,6 +78,7 @@ class TestClassifyExisting:
         result = clf.classify(req)
 
         assert result.label == "Sushi"
+        assert result.confidence == 0.5
         assert result.is_new is False
 
     def test_below_threshold_falls_to_extract(self, clf, mock_pipeline):
@@ -87,13 +88,13 @@ class TestClassifyExisting:
                 "scores": [0.2, 0.1],
             },
             {
-                "labels": ["love pizza", "love"],
+                "labels": ["great stuff", "great"],
                 "scores": [0.6, 0.2],
             },
         ]
 
         req = ClassifyRequest(
-            message="I love pizza",
+            message="this is great stuff",
             topic="Best Food",
             existing_labels=["Pizza", "Sushi"],
             threshold=0.5,
@@ -111,7 +112,7 @@ class TestClassifyExisting:
         }
 
         req = ClassifyRequest(
-            message="Give me pizza",
+            message="I really enjoy Italian flatbread",
             topic="Food",
             existing_labels=["Pizza"],
             threshold=0.5,
@@ -121,6 +122,25 @@ class TestClassifyExisting:
         assert result.label == "Pizza"
         assert result.confidence == 0.95
         assert result.is_new is False
+
+    def test_keyword_miss_falls_to_model(self, clf, mock_pipeline):
+        mock_pipeline.return_value = {
+            "labels": ["Pizza", "Sushi"],
+            "scores": [0.85, 0.10],
+        }
+        call_count_after_init = mock_pipeline.call_count
+
+        req = ClassifyRequest(
+            message="pancakes are great",
+            topic="Best Food",
+            existing_labels=["Pizza", "Sushi"],
+            threshold=0.5,
+        )
+        result = clf.classify(req)
+
+        assert mock_pipeline.call_count == call_count_after_init + 1
+        assert result.label == "Pizza"
+        assert result.confidence == 0.85
 
 
 class TestExtractNew:
@@ -255,3 +275,174 @@ class TestCandidateGeneration:
     def test_special_characters_only_returns_empty(self, clf, mock_pipeline):
         candidates = clf._generate_extraction_labels("!@#$%")
         assert candidates == []
+
+
+class TestKeywordMatch:
+    def test_exact_word_match(self, clf):
+        req = ClassifyRequest(
+            message="pizza",
+            topic="Food",
+            existing_labels=["Pizza", "Sushi"],
+            threshold=0.5,
+        )
+        result = clf._keyword_match(req)
+
+        assert result is not None
+        assert result.label == "Pizza"
+        assert result.confidence == 1.0
+        assert result.is_new is False
+
+    def test_partial_word_match(self, clf):
+        req = ClassifyRequest(
+            message="voting for sushi today",
+            topic="Food",
+            existing_labels=["sushi deserves win", "choose sushi", "sushi clearly"],
+            threshold=0.3,
+        )
+        result = clf._keyword_match(req)
+
+        assert result is not None
+        assert "sushi" in result.label.lower()
+        assert result.confidence > 0
+
+    def test_no_overlap(self, clf):
+        req = ClassifyRequest(
+            message="pancakes are great",
+            topic="Food",
+            existing_labels=["Pizza", "Sushi"],
+            threshold=0.5,
+        )
+        result = clf._keyword_match(req)
+
+        assert result is None
+
+    def test_overlap_below_threshold(self, clf):
+        req = ClassifyRequest(
+            message="I love sushi and pizza",
+            topic="Food",
+            existing_labels=["Pizza Margherita Special"],
+            threshold=0.8,
+        )
+        result = clf._keyword_match(req)
+
+        assert result is None
+
+    def test_stop_words_ignored(self, clf):
+        req = ClassifyRequest(
+            message="the pizza is the best",
+            topic="Food",
+            existing_labels=["Pizza"],
+            threshold=0.5,
+        )
+        result = clf._keyword_match(req)
+
+        assert result is not None
+        assert result.label == "Pizza"
+        assert result.confidence == 1.0
+
+    def test_tiebreak_shorter_label(self, clf):
+        req = ClassifyRequest(
+            message="I love ramen",
+            topic="Food",
+            existing_labels=["Ramen Special", "Ramen"],
+            threshold=0.5,
+        )
+        result = clf._keyword_match(req)
+
+        assert result is not None
+        assert result.label == "Ramen"
+
+    def test_tiebreak_alphabetical(self, clf):
+        req = ClassifyRequest(
+            message="I think sushi is the best",
+            topic="Food",
+            existing_labels=["sushi clearly", "sushi deserves"],
+            threshold=0.3,
+        )
+        result = clf._keyword_match(req)
+
+        assert result is not None
+        assert result.label == "sushi clearly"
+
+    def test_compound_labels(self, clf):
+        req = ClassifyRequest(
+            message="choose sushi for dinner",
+            topic="Food",
+            existing_labels=["choose sushi", "go with pizza"],
+            threshold=0.5,
+        )
+        result = clf._keyword_match(req)
+
+        assert result is not None
+        assert result.label == "choose sushi"
+
+    def test_all_scores_present(self, clf):
+        req = ClassifyRequest(
+            message="pizza",
+            topic="Food",
+            existing_labels=["Pizza"],
+            threshold=0.5,
+        )
+        result = clf._keyword_match(req)
+
+        assert result is not None
+        assert result.all_scores is not None
+        assert len(result.all_scores) == 1
+        assert "Pizza" in result.all_scores
+
+    def test_message_with_no_content_words(self, clf):
+        req = ClassifyRequest(
+            message="I am the best",
+            topic="Food",
+            existing_labels=["Pizza", "Sushi"],
+            threshold=0.5,
+        )
+        result = clf._keyword_match(req)
+
+        assert result is None
+
+    def test_label_all_stop_words_skipped(self, clf):
+        req = ClassifyRequest(
+            message="the and or is",
+            topic="Food",
+            existing_labels=["The And", "Pizza"],
+            threshold=0.5,
+        )
+        result = clf._keyword_match(req)
+
+        assert result is None
+
+    def test_keyword_match_no_model_call(self, clf, mock_pipeline):
+        call_count_after_init = mock_pipeline.call_count
+
+        req = ClassifyRequest(
+            message="I love pizza",
+            topic="Best Food",
+            existing_labels=["Pizza", "Sushi", "Burger"],
+            threshold=0.5,
+        )
+        result = clf.classify(req)
+
+        assert mock_pipeline.call_count == call_count_after_init
+        assert result.label == "Pizza"
+        assert result.is_new is False
+
+
+class TestLongestCommonSubstring:
+    def test_empty_strings(self):
+        assert VoteClassifier._longest_common_substring_len("", "hello") == 0
+        assert VoteClassifier._longest_common_substring_len("hello", "") == 0
+        assert VoteClassifier._longest_common_substring_len("", "") == 0
+
+    def test_no_common_substring(self):
+        assert VoteClassifier._longest_common_substring_len("abc", "def") == 0
+
+    def test_full_match(self):
+        assert VoteClassifier._longest_common_substring_len("hello", "hello") == 5
+
+    def test_partial_match(self):
+        assert VoteClassifier._longest_common_substring_len("sushi is great", "raw sushi") == 5
+
+    def test_single_char_match(self):
+        assert VoteClassifier._longest_common_substring_len("a", "a") == 1
+        assert VoteClassifier._longest_common_substring_len("abc", "xbx") == 1

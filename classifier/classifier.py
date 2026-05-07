@@ -74,11 +74,76 @@ class VoteClassifier:
 
     def classify(self, req: ClassifyRequest) -> ClassifyResponse:
         if req.existing_labels:
+            result = self._keyword_match(req)
+            if result is not None:
+                return result
+
             result = self._classify_existing(req)
             if result is not None:
                 return result
 
         return self._extract_new(req)
+
+    def _keyword_match(self, req: ClassifyRequest) -> ClassifyResponse | None:
+        msg_words = set(re.findall(r"\b[a-zA-Z]+\b", req.message.lower()))
+
+        best_label = None
+        best_score: tuple[int, int, int] = (-1, 0, -1)
+        best_label_word_count = 0
+        best_overlap = 0
+
+        for label in req.existing_labels:
+            lwords = set(re.findall(r"\b[a-zA-Z]+\b", label.lower()))
+            content_lwords = {w for w in lwords if w not in STOP_WORDS and len(w) > 1}
+
+            if not content_lwords:
+                continue
+
+            overlap = sum(1 for w in (msg_words & lwords) if w not in STOP_WORDS and len(w) > 1)
+
+            if overlap == 0:
+                continue
+
+            lcs_len = self._longest_common_substring_len(req.message.lower(), label.lower())
+
+            score = (overlap, -len(content_lwords), lcs_len)
+
+            if best_label is None or score > best_score or (score == best_score and label.lower() < best_label.lower()):
+                best_score = score
+                best_label = label
+                best_label_word_count = len(content_lwords)
+                best_overlap = overlap
+
+        if best_label is None:
+            return None
+
+        confidence = best_overlap / best_label_word_count
+        if confidence >= req.threshold:
+            return ClassifyResponse(
+                label=best_label,
+                confidence=confidence,
+                is_new=False,
+                all_scores={best_label: confidence},
+            )
+
+        return None
+
+    @staticmethod
+    def _longest_common_substring_len(a: str, b: str) -> int:
+        if not a or not b:
+            return 0
+        m, n = len(a), len(b)
+        max_len = 0
+        prev = [0] * (n + 1)
+        for i in range(1, m + 1):
+            curr = [0] * (n + 1)
+            for j in range(1, n + 1):
+                if a[i - 1] == b[j - 1]:
+                    curr[j] = prev[j - 1] + 1
+                    if curr[j] > max_len:
+                        max_len = curr[j]
+            prev = curr
+        return max_len
 
     def _classify_existing(self, req: ClassifyRequest) -> ClassifyResponse | None:
         result = self._pipeline(
