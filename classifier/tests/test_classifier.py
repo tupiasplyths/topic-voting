@@ -17,7 +17,14 @@ def mock_pipeline(mock_transformers_fixture):
 
 
 @pytest.fixture
-def clf(mock_pipeline):
+def mock_keybert(mock_keybert_fixture):
+    mock_kw_model = MagicMock()
+    mock_keybert_fixture.KeyBERT.return_value = mock_kw_model
+    yield mock_kw_model
+
+
+@pytest.fixture
+def clf(mock_pipeline, mock_keybert):
     return VoteClassifier()
 
 
@@ -81,16 +88,15 @@ class TestClassifyExisting:
         assert result.confidence == 0.5
         assert result.is_new is False
 
-    def test_below_threshold_falls_to_extract(self, clf, mock_pipeline):
-        mock_pipeline.side_effect = [
-            {
-                "labels": ["Pizza", "Sushi"],
-                "scores": [0.2, 0.1],
-            },
-            {
-                "labels": ["great stuff", "great"],
-                "scores": [0.6, 0.2],
-            },
+    def test_below_threshold_falls_to_extract(self, clf, mock_pipeline, mock_keybert):
+        mock_pipeline.return_value = {
+            "labels": ["Pizza", "Sushi"],
+            "scores": [0.2, 0.1],
+        }
+        mock_keybert.extract_keywords.return_value = [
+            ("great stuff", 0.6),
+            ("stuff", 0.4),
+            ("great", 0.35),
         ]
 
         req = ClassifyRequest(
@@ -103,7 +109,8 @@ class TestClassifyExisting:
         result = clf.classify(req)
 
         assert result.is_new is True
-        assert mock_pipeline.call_count - call_count_before == 2
+        assert result.label == "great stuff"
+        assert mock_pipeline.call_count - call_count_before == 1
 
     def test_single_existing_label(self, clf, mock_pipeline):
         mock_pipeline.return_value = {
@@ -144,11 +151,12 @@ class TestClassifyExisting:
 
 
 class TestExtractNew:
-    def test_no_existing_labels_extracts_new(self, clf, mock_pipeline):
-        mock_pipeline.return_value = {
-            "labels": ["beats tacos", "nothing beats"],
-            "scores": [0.7, 0.2],
-        }
+    def test_extracts_keyword(self, clf, mock_keybert):
+        mock_keybert.extract_keywords.return_value = [
+            ("tacos", 0.82),
+            ("beats tacos", 0.65),
+            ("nothing beats", 0.51),
+        ]
 
         req = ClassifyRequest(
             message="Nothing beats tacos",
@@ -159,10 +167,45 @@ class TestExtractNew:
         result = clf.classify(req)
 
         assert result.is_new is True
+        assert result.label == "tacos"
+        assert result.confidence == 0.82
         assert result.all_scores is None
 
-    def test_pipeline_error_falls_back(self, clf, mock_pipeline):
-        mock_pipeline.side_effect = RuntimeError("model error")
+    def test_extracts_bigram(self, clf, mock_keybert):
+        mock_keybert.extract_keywords.return_value = [
+            ("new york", 0.78),
+            ("york", 0.55),
+            ("new", 0.40),
+        ]
+
+        req = ClassifyRequest(
+            message="New York never sleeps",
+            topic="Cities",
+            existing_labels=[],
+            threshold=0.5,
+        )
+        result = clf.classify(req)
+
+        assert result.is_new is True
+        assert result.label == "new york"
+        assert result.confidence == 0.78
+
+    def test_no_keywords_fallback(self, clf, mock_keybert):
+        mock_keybert.extract_keywords.return_value = []
+
+        req = ClassifyRequest(
+            message="!@#$%",
+            topic="Test",
+            existing_labels=[],
+            threshold=0.5,
+        )
+        result = clf.classify(req)
+
+        assert result.is_new is True
+        assert result.confidence == 0.0
+
+    def test_keybert_error_fallback(self, clf, mock_keybert):
+        mock_keybert.extract_keywords.side_effect = RuntimeError("model error")
 
         req = ClassifyRequest(
             message="Short msg",
@@ -176,8 +219,8 @@ class TestExtractNew:
         assert result.confidence == 0.0
         assert result.label == "Short Msg"
 
-    def test_pipeline_error_logs(self, clf, mock_pipeline, caplog):
-        mock_pipeline.side_effect = RuntimeError("model error")
+    def test_keybert_error_logs(self, clf, mock_keybert, caplog):
+        mock_keybert.extract_keywords.side_effect = RuntimeError("model error")
 
         req = ClassifyRequest(
             message="Short msg",
@@ -188,22 +231,10 @@ class TestExtractNew:
         with caplog.at_level(logging.ERROR, logger="classifier"):
             clf.classify(req)
 
-        assert any("Extraction pipeline failed" in r.message for r in caplog.records)
+        assert any("KeyBERT extraction failed" in r.message for r in caplog.records)
 
-    def test_empty_message_no_candidates(self, clf, mock_pipeline):
-        req = ClassifyRequest(
-            message="!@#$%",
-            topic="Test",
-            existing_labels=[],
-            threshold=0.5,
-        )
-        result = clf.classify(req)
-
-        assert result.is_new is True
-        assert result.confidence == 0.0
-
-    def test_long_message_truncation_fallback(self, clf, mock_pipeline):
-        mock_pipeline.side_effect = RuntimeError("fail")
+    def test_long_message_fallback(self, clf, mock_keybert):
+        mock_keybert.extract_keywords.side_effect = RuntimeError("fail")
 
         long_msg = "A" * 200
         req = ClassifyRequest(
@@ -215,6 +246,51 @@ class TestExtractNew:
         result = clf.classify(req)
 
         assert len(result.label) <= 50
+
+    def test_below_threshold_falls_to_extract(self, clf, mock_pipeline, mock_keybert):
+        mock_pipeline.return_value = {
+            "labels": ["Pizza", "Sushi"],
+            "scores": [0.2, 0.1],
+        }
+        mock_keybert.extract_keywords.return_value = [
+            ("great stuff", 0.6),
+            ("stuff", 0.4),
+            ("great", 0.35),
+        ]
+
+        req = ClassifyRequest(
+            message="this is great stuff",
+            topic="Best Food",
+            existing_labels=["Pizza", "Sushi"],
+            threshold=0.5,
+        )
+        call_count_before = mock_pipeline.call_count
+        result = clf.classify(req)
+
+        assert result.is_new is True
+        assert result.label == "great stuff"
+        assert mock_pipeline.call_count - call_count_before == 1
+
+    def test_extract_uses_mmr(self, clf, mock_keybert):
+        mock_keybert.extract_keywords.return_value = [("pizza", 0.9)]
+
+        req = ClassifyRequest(
+            message="I love pizza",
+            topic="Food",
+            existing_labels=[],
+            threshold=0.5,
+        )
+        clf.classify(req)
+
+        # Warmup calls extract_keywords once, so check the last call
+        mock_keybert.extract_keywords.assert_called_with(
+            "I love pizza",
+            keyphrase_ngram_range=(1, 2),
+            stop_words="english",
+            top_n=3,
+            use_mmr=True,
+            diversity=0.7,
+        )
 
 
 class TestLabelRegistry:
@@ -248,36 +324,6 @@ class TestLabelRegistry:
     def test_max_labels_per_topic_default(self, mock_pipeline):
         clf = VoteClassifier()
         assert clf.max_labels_per_topic == 100
-
-
-class TestCandidateGeneration:
-    def test_generates_candidates(self, clf, mock_pipeline):
-        candidates = clf._generate_extraction_labels("I love pizza")
-        assert len(candidates) > 0
-        assert len(candidates) <= 10
-
-    def test_filters_stop_words(self, clf, mock_pipeline):
-        candidates = clf._generate_extraction_labels("I love pizza")
-        for c in candidates:
-            assert "i " not in c.lower() or c.startswith("i ")
-            assert "[" not in c
-
-    def test_includes_unigrams(self, clf, mock_pipeline):
-        candidates = clf._generate_extraction_labels("I love pizza today")
-        unigrams = [c for c in candidates if len(c.split()) == 1]
-        assert len(unigrams) > 0
-        assert "love" in unigrams
-        assert "pizza" in unigrams
-        assert "today" in unigrams
-
-    def test_candidates_limited_to_ten(self, clf, mock_pipeline):
-        long_msg = " ".join([f"word{i}" for i in range(20)])
-        candidates = clf._generate_extraction_labels(long_msg)
-        assert len(candidates) <= 10
-
-    def test_special_characters_only_returns_empty(self, clf, mock_pipeline):
-        candidates = clf._generate_extraction_labels("!@#$%")
-        assert candidates == []
 
 
 class TestKeywordMatch:

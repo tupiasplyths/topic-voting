@@ -4,6 +4,7 @@ import re
 import threading
 from collections import OrderedDict
 
+from keybert import KeyBERT
 from transformers import pipeline
 
 from schemas import ClassifyRequest, ClassifyResponse
@@ -41,6 +42,7 @@ class VoteClassifier:
             truncation=True,
             max_length=self.max_length,
         )
+        self._keybert = KeyBERT()
         self._label_registry: dict[str, OrderedDict[str, None]] = {}
         self._lock = threading.Lock()
         self._warmup()
@@ -55,6 +57,8 @@ class VoteClassifier:
                 truncation=True,
                 max_length=self.max_length,
             )
+            # Warm up KeyBERT
+            self._keybert.extract_keywords("warmup", top_n=1)
             logger.info("Model warmup complete.")
         except Exception as e:
             logger.warning(f"Model warmup failed: {e}")
@@ -169,85 +173,29 @@ class VoteClassifier:
         return None
 
     def _extract_new(self, req: ClassifyRequest) -> ClassifyResponse:
-        candidates = self._generate_extraction_labels(req.message)
-
-        if not candidates:
-            return ClassifyResponse(
-                label=req.message[:50].title(),
-                confidence=0.0,
-                is_new=True,
-            )
-
         try:
-            result = self._pipeline(
-                f"{req.message} [Topic: {req.topic}]",
-                candidate_labels=candidates,
-                multi_label=False,
-                truncation=True,
-                max_length=self.max_length,
+            keywords = self._keybert.extract_keywords(
+                req.message,
+                keyphrase_ngram_range=(1, 2),  # 1-2 word labels
+                stop_words="english",
+                top_n=3,
+                use_mmr=True,              # Maximal Marginal Relevance
+                diversity=0.7,             # Diversity parameter for MMR
             )
 
-            top_label = result["labels"][0]
-            top_score = result["scores"][0]
-            scores = dict(zip(result["labels"], result["scores"]))
-
-            labeled_label = self._pick_best_label(top_label, candidates, scores, req)
-
-            return ClassifyResponse(
-                label=labeled_label,
-                confidence=top_score,
-                is_new=True,
-            )
+            if keywords:
+                top_keyword, top_score = keywords[0]
+                return ClassifyResponse(
+                    label=top_keyword,
+                    confidence=top_score,
+                    is_new=True,
+                )
         except Exception as e:
-            logger.error(f"Extraction pipeline failed for message: {e}", exc_info=True)
-            return ClassifyResponse(
-                label=req.message[:50].title(),
-                confidence=0.0,
-                is_new=True,
-            )
+            logger.error(f"KeyBERT extraction failed: {e}", exc_info=True)
 
-    def _pick_best_label(self, top_label: str, candidates: list[str],
-                          scores: dict[str, float], req: ClassifyRequest) -> str:
-        proper_nouns = self._find_proper_nouns(req.message)
-
-        scored = []
-        for c in candidates:
-            words = c.split()
-            contains_proper = any(p in words for p in proper_nouns)
-            word_count = len(words)
-            char_len = len(c)
-            scored.append((word_count, 0 if contains_proper else 1, -char_len if contains_proper else char_len, c))
-
-        scored.sort(key=lambda x: (x[0], x[1], x[2]))
-        best = scored[0][3]
-
-        return best
-
-    def _find_proper_nouns(self, message: str) -> list[str]:
-        words = re.findall(r"\b[a-zA-Z]+\b", message)
-        proper = set()
-        for w in words:
-            if w[0].isupper():
-                proper.add(w.lower())
-        return list(proper)
-
-    def _generate_extraction_labels(self, message: str) -> list[str]:
-        words = re.findall(r"\b[a-zA-Z]+\b", message.lower())
-        words = [w for w in words if w not in STOP_WORDS and len(w) > 1]
-        if not words:
-            return []
-
-        candidates = []
-        for i in range(len(words)):
-            for j in range(i + 1, min(i + 4, len(words) + 1)):
-                phrase = " ".join(words[i:j])
-                candidates.append(phrase)
-
-        seen = set()
-        unique = []
-        for c in candidates:
-            if c not in seen:
-                seen.add(c)
-                unique.append(c)
-
-        return unique[:10] if unique else []
+        # Fallback
+        return ClassifyResponse(
+            label=req.message[:50].title(),
+            confidence=0.0,
+            is_new=True,
+        )

@@ -12,6 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Pre-download model at build time
 RUN python -c "from transformers import pipeline; pipeline('zero-shot-classification', model='${CLASSIFIER_MODEL}')"
+RUN python -c "from keybert import KeyBERT; KeyBERT()"
 
 # Runtime stage
 FROM python:3.11-slim
