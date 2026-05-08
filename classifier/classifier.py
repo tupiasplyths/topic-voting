@@ -189,9 +189,12 @@ class VoteClassifier:
 
             top_label = result["labels"][0]
             top_score = result["scores"][0]
+            scores = dict(zip(result["labels"], result["scores"]))
+
+            labeled_label = self._pick_best_label(top_label, candidates, scores, req)
 
             return ClassifyResponse(
-                label=top_label,
+                label=labeled_label,
                 confidence=top_score,
                 is_new=True,
             )
@@ -203,6 +206,31 @@ class VoteClassifier:
                 is_new=True,
             )
 
+    def _pick_best_label(self, top_label: str, candidates: list[str],
+                          scores: dict[str, float], req: ClassifyRequest) -> str:
+        proper_nouns = self._find_proper_nouns(req.message)
+
+        scored = []
+        for c in candidates:
+            words = c.split()
+            contains_proper = any(p in words for p in proper_nouns)
+            word_count = len(words)
+            char_len = len(c)
+            scored.append((word_count, 0 if contains_proper else 1, -char_len if contains_proper else char_len, c))
+
+        scored.sort(key=lambda x: (x[0], x[1], x[2]))
+        best = scored[0][3]
+
+        return best
+
+    def _find_proper_nouns(self, message: str) -> list[str]:
+        words = re.findall(r"\b[a-zA-Z]+\b", message)
+        proper = set()
+        for w in words:
+            if w[0].isupper():
+                proper.add(w.lower())
+        return list(proper)
+
     def _generate_extraction_labels(self, message: str) -> list[str]:
         words = re.findall(r"\b[a-zA-Z]+\b", message.lower())
         words = [w for w in words if w not in STOP_WORDS and len(w) > 1]
@@ -211,7 +239,7 @@ class VoteClassifier:
 
         candidates = []
         for i in range(len(words)):
-            for j in range(i + 2, min(i + 4, len(words) + 1)):
+            for j in range(i + 1, min(i + 4, len(words) + 1)):
                 phrase = " ".join(words[i:j])
                 candidates.append(phrase)
 

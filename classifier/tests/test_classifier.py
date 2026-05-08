@@ -262,10 +262,13 @@ class TestCandidateGeneration:
             assert "i " not in c.lower() or c.startswith("i ")
             assert "[" not in c
 
-    def test_no_unigrams(self, clf, mock_pipeline):
+    def test_includes_unigrams(self, clf, mock_pipeline):
         candidates = clf._generate_extraction_labels("I love pizza today")
-        for c in candidates:
-            assert len(c.split()) >= 2
+        unigrams = [c for c in candidates if len(c.split()) == 1]
+        assert len(unigrams) > 0
+        assert "love" in unigrams
+        assert "pizza" in unigrams
+        assert "today" in unigrams
 
     def test_candidates_limited_to_ten(self, clf, mock_pipeline):
         long_msg = " ".join([f"word{i}" for i in range(20)])
